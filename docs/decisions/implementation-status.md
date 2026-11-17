@@ -31,7 +31,7 @@ container cannot provide — they are verified on the **owner's Windows machine*
 | **M2 — Durable recovery** | **GREEN** | 12/12 `Infrastructure.Tests` pass on .NET 10.0.12 (owner's Windows box): crash survival, single-shot complete, idempotent outbox, checkpoint integrity/schema validation, budget preservation, stale-generation fencing, owner-controlled recovery. Solution builds clean. |
 | **M3 — Real Ollama execution** | **GREEN** | 26 model-free `Infrastructure.Tests` (gateway failure taxonomy, digest/registry checks, independent JSON validation, loopback-only security guard) + 3 live `Integration.Tests` against `qwen3.5:9b` (digest resolution, missing-model rejection, structured JSON response) via `scripts/check-ollama.ps1`. Ollama reached over REST (HttpClient), loopback-only, no SDK dependency. |
 | **M4 — Research Laboratory** | **GREEN** | 43 model-free `Infrastructure.Tests` (evidence governance, tool authorization, role validators, orchestrator with scripted client, JSON extraction) + live `Integration.Tests` research run: real Wikipedia evidence → `qwen3.5:9b` Planner→Researcher→Skeptic→Report, every finding validated against captured passages. Reasoning-model (`<think>`) output handled. |
-| **M5 — Evaluation & Mission Control** | in progress | Cloud publication/digest pipeline + public showcase (model-free, here), then three-lane evaluation (.NET). Cloud public projections already enforce privacy (M0/M1). |
+| **M5 — Evaluation & Mission Control** | **GREEN** | Cloud publication/digest pipeline (46/46 cloud tests) + public showcase/report view (9/9 web tests), both verified in the container; three-lane evaluation (7/7 `Evaluation.Tests` on the owner's machine). Privacy, exact-digest approval, no-reuse, withdrawal, and evaluation-independent-of-execution all enforced. |
 | **M6 — Public deployment** | NOT AUTHORIZED | Requires separate owner authorization. Never executed. |
 
 ## M0 verification evidence
@@ -68,11 +68,17 @@ container cannot provide — they are verified on the **owner's Windows machine*
 - `scripts/check-ollama.ps1` → **4/4** live, incl. the end-to-end research workflow producing an
   evidence-grounded report from a real Wikipedia article via `qwen3.5:9b`.
 
-## M5 remaining
+## M5 verification evidence
 
-Implemented in phases: the cloud publication/digest pipeline + public showcase (TypeScript, verified in
-the cloud container), then the three evaluation lanes (.NET: technical + laboratory model-free, semantic
-gated live). See `docs/decisions/m2-m5-handoff.md`.
+- `cd apps/cloud-api && npm test` → **46/46** (adds 6 publication-pipeline tests).
+- `cd apps/web && npm test` → **9/9** (adds 5 public showcase / report-view tests).
+- `dotnet test Evaluation.Tests` → **7/7** on the owner's machine (three lanes).
+
+## All milestones GREEN (M0–M5)
+
+The complete authorized scope is implemented and verified. M6 (public deployment) remains NOT
+AUTHORIZED and was never executed. Verified test totals: cloud-api 46, web 9, .NET Infrastructure.Tests
+43, .NET Evaluation.Tests 7, .NET Integration.Tests (live, gated) 4.
 
 ## What is explicitly NOT done / assumed
 
