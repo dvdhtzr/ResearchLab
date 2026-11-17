@@ -554,6 +554,10 @@ export async function claimNext(args: ClaimArgs): Promise<ClaimResult> {
         leaseId,
         leaseExpiresAt: new Date(leaseExpiresAt).toISOString(),
         workerId: worker.id,
+        jobType: claimedJob.job_type,
+        executionProfile: claimedJob.execution_profile,
+        // The worker needs the research request to execute it.
+        request: JSON.parse(claimedJob.request_json),
       },
     );
     // Persist the real response into the receipt (it was inserted with a placeholder).

@@ -42,6 +42,18 @@ describe("M0-04 concurrent claims produce one winner", () => {
   });
 });
 
+describe("claim response carries the research request", () => {
+  it("includes the question, evidence policy, and execution profile for the worker", async () => {
+    await admit({ key: "c-req", body: creationBody({ executionProfile: "quick" }) });
+    const res = await claim("k-req");
+    expect(res.claimed).toBe(true);
+    const r = res.response as unknown as { executionProfile: string; request: { question: string; evidencePolicy: string } };
+    expect(r.executionProfile).toBe("quick");
+    expect(r.request.question).toBe("Compare SQL Server and PostgreSQL");
+    expect(r.request.evidencePolicy).toBe("hybrid-governed");
+  });
+});
+
 describe("deterministic claim ordering", () => {
   it("claims high priority before normal before low (oldest within a priority)", async () => {
     const t0 = Date.now();

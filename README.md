@@ -85,8 +85,21 @@ dotnet build .\ResearchMissionControl.slnx -c Debug
 `check-ollama.ps1` runs the gated live integration suite: it fetches a real Wikipedia article as
 immutable evidence, then drives **Planner → Researcher → Skeptic → Report Builder** on `qwen3.5:9b`,
 validating every finding against the captured evidence. It needs Ollama running and outbound HTTPS to
-`en.wikipedia.org`. (The research pipeline currently runs as this harness; wiring the .NET worker's
-cloud poll-loop to the orchestrator is the next integration step beyond the M0–M5 scope.)
+`en.wikipedia.org`.
+
+### C. The real worker, wired end to end
+
+The .NET worker can now poll the cloud API, claim real jobs, run the orchestrator, and report results
+back — so a question submitted in the UI is researched by your local model. Run the cloud API, web, and
+Ollama (sections A + B), then in another terminal:
+
+```powershell
+.\scripts\run-worker.ps1
+```
+
+Now submit a question at **http://localhost:5173/owner**: the worker claims it, the timeline advances
+**Queued → Claimed → Running → Completed**, and the job's disposition reflects the real research run.
+(Use the `worker-mock` from section A instead for a fast, model-free lifecycle demo.)
 
 ### Verify everything
 
