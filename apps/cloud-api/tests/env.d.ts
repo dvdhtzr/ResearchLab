@@ -8,5 +8,6 @@ declare module "cloudflare:test" {
     RMC_CONTRACT_VERSION: string;
     RMC_LEASE_SECONDS: string;
     RMC_DEV_AUTH_ENABLED: string;
+    RMC_WORKER_SHARED_SECRET: string;
   }
 }

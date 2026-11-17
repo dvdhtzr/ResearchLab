@@ -26,7 +26,7 @@ its acceptance tests actually pass, and BLOCKED when a required live-model/runti
 | Milestone | Status | Notes |
 |-----------|--------|-------|
 | **M0 — Foundation & contracts** | **GREEN** | 34/34 tests pass on local D1 (Miniflare), incl. 8-way concurrency + DB-failure injection. Covers M0-01…M0-12. |
-| **M1 — First end-to-end job** | in progress | Local API router, minimal React dashboard, dev auth, mock worker, full lifecycle. |
+| **M1 — First end-to-end job** | **GREEN** | Full HTTP API router + dev auth, minimal React Mission Control, standalone mock worker. 40/40 cloud-api tests (incl. `lifecycle.test.ts` driving Submit→Queued→Claimed→Running→Completed→Display over the real Worker) + 4/4 web RTL tests. Verified live: `wrangler dev` + mock-worker CLI + `scripts/smoke.sh` (exit 0, timeline `admitted,claimed,started,completed`). |
 | **M2 — Durable recovery** | BLOCKED | Requires the .NET worker (SQLite journals, checkpoints, outbox). No `dotnet` here. Cloud-side recovery authorization + reconciliation already built & tested in M0. |
 | **M3 — Real Ollama execution** | BLOCKED | Requires .NET + a local Ollama model. Neither present. |
 | **M4 — Research Laboratory** | BLOCKED | Depends on M3. |
@@ -35,9 +35,18 @@ its acceptance tests actually pass, and BLOCKED when a required live-model/runti
 
 ## M0 verification evidence
 
-- `cd apps/cloud-api && npm test` → **8 files, 34 tests, all passing**.
+- `cd apps/cloud-api && npm test` → **34 M0 tests passing** (8 files).
 - `npx tsc --noEmit` → clean.
 - Test ↔ acceptance mapping: see `docs/contracts/m0-acceptance.md`.
+
+## M1 verification evidence
+
+- `cd apps/cloud-api && npm test` → **40 tests passing** (adds `lifecycle.test.ts`: 6 cases).
+- `cd apps/web && npm test` → **4 RTL tests passing**; `npx vite build` → clean production bundle.
+- `bash scripts/smoke.sh` → **exit 0**, `state=Completed`, timeline `admitted,claimed,started,completed`
+  (real `wrangler dev` + local D1 + mock-worker CLI).
+- Live-verified endpoints: owner admit/get/events/control, worker claim/start/complete, 401 on
+  missing worker credential, 404 cross-owner isolation.
 
 ## What is explicitly NOT done / assumed
 

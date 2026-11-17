@@ -19,6 +19,7 @@ export default defineWorkersConfig(async () => {
         workers: {
           isolatedStorage: true,
           singleWorker: true,
+          main: "./src/index.ts",
           miniflare: {
             compatibilityDate: "2025-04-01",
             compatibilityFlags: ["nodejs_compat"],
@@ -29,6 +30,7 @@ export default defineWorkersConfig(async () => {
               RMC_CONTRACT_VERSION: "1.0",
               RMC_LEASE_SECONDS: "180",
               RMC_DEV_AUTH_ENABLED: "true",
+              RMC_WORKER_SHARED_SECRET: "dev-worker-secret",
             },
           },
         },
