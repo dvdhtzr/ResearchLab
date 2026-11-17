@@ -28,7 +28,14 @@ public sealed class CloudApiClient : ICloudApiClient, IDisposable
         }
         else
         {
-            _http = new HttpClient { BaseAddress = new Uri(normalized, UriKind.Absolute), Timeout = TimeSpan.FromSeconds(60) };
+            // Recycle pooled connections so a socket the dev server has quietly closed is
+            // not reused (which otherwise throws on the next idle poll).
+            var handler = new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromSeconds(30),
+                PooledConnectionIdleTimeout = TimeSpan.FromSeconds(10),
+            };
+            _http = new HttpClient(handler) { BaseAddress = new Uri(normalized, UriKind.Absolute), Timeout = TimeSpan.FromSeconds(60) };
             _ownsHttp = true;
         }
     }

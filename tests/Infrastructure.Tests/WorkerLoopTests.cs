@@ -65,6 +65,25 @@ public sealed class WorkerLoopTests
         Assert.DoesNotContain("fail", cloud.Calls);
     }
 
+    private sealed class ClaimThrowsCloud : ICloudApiClient
+    {
+        public List<string> Calls { get; } = new();
+        public Task<ClaimedJob?> ClaimAsync(CancellationToken ct) => throw new InvalidOperationException("connection reset");
+        public Task StartAsync(string j, long g, string l, CancellationToken ct) { Calls.Add("start"); return Task.CompletedTask; }
+        public Task HeartbeatAsync(string j, long g, string l, CancellationToken ct) => Task.CompletedTask;
+        public Task CompleteAsync(string j, long g, string l, string d, CancellationToken ct) { Calls.Add("complete"); return Task.CompletedTask; }
+        public Task FailAsync(string j, long g, string l, string r, CancellationToken ct) { Calls.Add("fail"); return Task.CompletedTask; }
+    }
+
+    [Fact]
+    public async Task ClaimTransportError_IsBenign_NoWork()
+    {
+        var cloud = new ClaimThrowsCloud();
+        var loop = new WorkerLoop(cloud, new FixedRunner(new ResearchRunOutcome("supported", null)), NoHeartbeat);
+        Assert.False(await loop.ProcessOnceAsync(CancellationToken.None)); // treated as "no work", retried next tick
+        Assert.Empty(cloud.Calls);
+    }
+
     [Fact]
     public async Task RunnerException_FailsTheJob()
     {

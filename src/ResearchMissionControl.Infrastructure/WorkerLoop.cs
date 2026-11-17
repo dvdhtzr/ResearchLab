@@ -28,7 +28,17 @@ public sealed class WorkerLoop
     // was found, false if the queue was empty.
     public async Task<bool> ProcessOnceAsync(CancellationToken cancellationToken)
     {
-        var job = await _cloud.ClaimAsync(cancellationToken).ConfigureAwait(false);
+        ClaimedJob? job;
+        try
+        {
+            job = await _cloud.ClaimAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A transient poll failure (e.g. the dev server reloading) is benign; retry next tick.
+            _log?.Invoke($"claim poll failed (will retry): {ex.Message}");
+            return false;
+        }
         if (job is null)
             return false;
         _log?.Invoke($"claimed {job.JobId} (generation {job.Generation})");
