@@ -54,7 +54,8 @@ public sealed class WorkerLoop
             }
 
             await _cloud.CompleteAsync(job.JobId, job.Generation, job.LeaseId, outcome.Disposition, cancellationToken).ConfigureAwait(false);
-            _log?.Invoke($"completed {job.JobId} (disposition {outcome.Disposition})");
+            var note = outcome.FailureReason is { Length: > 0 } reason ? $", note: {reason}" : string.Empty;
+            _log?.Invoke($"completed {job.JobId} (disposition {outcome.Disposition}{note})");
         }
         catch (OperationCanceledException)
         {
