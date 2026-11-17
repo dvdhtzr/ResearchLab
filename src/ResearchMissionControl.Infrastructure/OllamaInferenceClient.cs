@@ -85,6 +85,8 @@ public sealed class OllamaInferenceClient : IInferenceClient, IDisposable
             prompt = request.Prompt,
             stream = false,
             format = "json",
+            think = false, // reasoning models (e.g. qwen3): keep <think> text out of the JSON
+            options = new { temperature = 0.2 },
         });
 
         string body;
@@ -111,7 +113,51 @@ public sealed class OllamaInferenceClient : IInferenceClient, IDisposable
             // Ollama returned an unexpected envelope; surface as transport error, not a fake result.
             throw new InferenceTransportException("Ollama response envelope missing 'response'.");
         }
-        return responseText.GetString() ?? string.Empty;
+        // Normalize: strip any code fences / stray text and return the first balanced JSON
+        // object. The gateway still validates this independently (never trusts the model).
+        return ExtractJsonObject(responseText.GetString() ?? string.Empty);
+    }
+
+    // Returns the first balanced top-level JSON object found in the text, after removing
+    // markdown code fences. Falls back to the trimmed input when no object is present.
+    public static string ExtractJsonObject(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+        var s = text.Trim();
+        if (s.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstNewline = s.IndexOf('\n');
+            if (firstNewline >= 0)
+                s = s[(firstNewline + 1)..];
+            if (s.EndsWith("```", StringComparison.Ordinal))
+                s = s[..^3];
+            s = s.Trim();
+        }
+
+        var start = s.IndexOf('{');
+        if (start < 0)
+            return s;
+
+        var depth = 0;
+        var inString = false;
+        var escape = false;
+        for (var i = start; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (escape) { escape = false; continue; }
+            if (c == '\\') { escape = true; continue; }
+            if (c == '"') { inString = !inString; continue; }
+            if (inString) continue;
+            if (c == '{') depth++;
+            else if (c == '}')
+            {
+                depth--;
+                if (depth == 0)
+                    return s.Substring(start, i - start + 1);
+            }
+        }
+        return s[start..];
     }
 
     public void Dispose()

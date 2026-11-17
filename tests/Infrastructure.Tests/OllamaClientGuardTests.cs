@@ -24,4 +24,16 @@ public sealed class OllamaClientGuardTests
         using var client = new OllamaInferenceClient(url);
         Assert.NotNull(client);
     }
+
+    [Theory]
+    [InlineData("{\"a\":1}", "{\"a\":1}")]
+    [InlineData("  {\"a\":1}  ", "{\"a\":1}")]
+    [InlineData("```json\n{\"a\":1}\n```", "{\"a\":1}")]
+    [InlineData("<think>reasoning here</think>{\"a\":1}", "{\"a\":1}")]
+    [InlineData("Here is the answer: {\"a\":{\"b\":2}} done.", "{\"a\":{\"b\":2}}")]
+    [InlineData("{\"s\":\"a } b\"}", "{\"s\":\"a } b\"}")]
+    public void ExtractsBalancedJsonObject(string input, string expected)
+    {
+        Assert.Equal(expected, OllamaInferenceClient.ExtractJsonObject(input));
+    }
 }
