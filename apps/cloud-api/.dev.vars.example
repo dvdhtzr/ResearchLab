@@ -1,0 +1,12 @@
+# Copy to .dev.vars (gitignored) for local development. NEVER commit real secrets.
+# Local dev uses a deterministic fake owner; these are only needed to exercise real auth paths.
+
+# Comma-separated allowlist of GitHub numeric account IDs permitted as owner.
+RMC_OWNER_ALLOWLIST=12345
+
+# GitHub OAuth app (local testing only).
+RMC_GITHUB_CLIENT_ID=replace-me
+RMC_GITHUB_CLIENT_SECRET=replace-me
+
+# Worker machine credential verifier material (local testing only).
+RMC_WORKER_SHARED_SECRET=replace-me

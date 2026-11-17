@@ -1,0 +1,262 @@
+openapi: 3.1.0
+info:
+  title: ResearchMissionControl Cloud API
+  version: "1.0"
+  description: >
+    Authoritative job orchestration API. The Cloudflare Worker owns job admission,
+    state transitions, execution leases & fencing, owner sessions, worker identities,
+    recovery decisions, publication approval, and bounded public projections.
+    All mutating endpoints require a bounded JSON body; unless exempted they require
+    an Idempotency-Key header. No endpoint returns raw SQL, stack traces, or secrets.
+servers:
+  - url: /api/v1
+    description: Versioned API root (local development)
+
+tags:
+  - name: public
+  - name: owner
+  - name: worker
+
+components:
+  securitySchemes:
+    ownerSession:
+      type: apiKey
+      in: cookie
+      name: __Host-rmc_session
+      description: Opaque owner session cookie (Secure, HttpOnly, SameSite=Lax).
+    workerCredential:
+      type: http
+      scheme: bearer
+      description: Dedicated, revocable machine credential. Separate from owner auth.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 200 }
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+  schemas:
+    JobCreationRequest:
+      $ref: ../schemas/job-creation.schema.json
+    MutationSuccess:
+      $ref: ../schemas/mutation-success.schema.json
+    ErrorResponse:
+      $ref: ../schemas/error.schema.json
+    PublicJob:
+      type: object
+      additionalProperties: false
+      required: [jobId, state, stage, disposition, updatedAt]
+      properties:
+        jobId: { type: string }
+        state:
+          type: string
+          enum: [Queued, Claimed, Running, RecoveryRequired, Completed, Failed, Cancelled]
+        stage: { type: [string, "null"] }
+        disposition:
+          type: [string, "null"]
+          enum: [not_determined, supported, mixed, inconclusive, null]
+        updatedAt: { type: string, format: date-time }
+    PublicEvent:
+      type: object
+      additionalProperties: false
+      required: [sequence, templateId, at]
+      description: Server-templated public activity event. Never raw LLM output.
+      properties:
+        sequence: { type: integer }
+        templateId: { type: string }
+        at: { type: string, format: date-time }
+    ControlRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [hold, release, set_priority, request_cancel]
+        priority: { type: string, enum: [low, normal, high] }
+    RecoveryRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedStateVersion, mode]
+      properties:
+        expectedStateVersion: { type: integer, minimum: 0 }
+        mode: { type: string, enum: [resume, restart, terminate] }
+        checkpointDigest: { type: string, description: "Required for resume. Locally validated SHA-256." }
+
+  responses:
+    Error:
+      description: Machine-readable error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+paths:
+  # ------------------------------------------------------------------ public
+  /public/jobs:
+    get:
+      tags: [public]
+      summary: List public-demo jobs (bounded, paginated projection).
+      parameters: [{ $ref: "#/components/parameters/Page" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PublicJob" } }
+                  page: { type: integer }
+  /public/jobs/{id}:
+    get:
+      tags: [public]
+      summary: Public projection of a single demo job. 404 for non-public resources.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PublicJob" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+  /public/jobs/{id}/events:
+    get:
+      tags: [public]
+      summary: Bounded public event timeline (server-templated).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/PublicEvent" } }
+        "404": { $ref: "#/components/responses/Error" }
+  /public/reports/{id}:
+    get:
+      tags: [public]
+      summary: Published report (approved bytes). Available even when the worker is offline.
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: OK }
+        "404": { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------- owner
+  /owner/session:
+    get:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      summary: Current authenticated owner session.
+      responses:
+        "200": { description: OK }
+        "401": { $ref: "#/components/responses/Error" }
+  /owner/jobs:
+    get:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      summary: Owner's jobs.
+      responses: { "200": { description: OK } }
+    post:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      summary: Admit a new job.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobCreationRequest" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/MutationSuccess" } } } }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /owner/jobs/{id}:
+    get:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: OK }, "404": { $ref: "#/components/responses/Error" } }
+  /owner/jobs/{id}/control:
+    post:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      summary: Hold / release / set priority / request cancellation.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ControlRequest" } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MutationSuccess" } } } }
+        "409": { $ref: "#/components/responses/Error" }
+  /owner/jobs/{id}/recovery:
+    post:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      summary: Authorize recovery (resume / restart / terminate).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RecoveryRequest" } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MutationSuccess" } } } }
+        "409": { $ref: "#/components/responses/Error" }
+  /owner/jobs/{id}/publication:
+    post:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      summary: Approve an exact digest / revoke approval / withdraw a published report.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses: { "200": { description: OK }, "409": { $ref: "#/components/responses/Error" } }
+  /owner/publications:
+    get:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      responses: { "200": { description: OK } }
+  /owner/models:
+    get:
+      tags: [owner]
+      security: [{ ownerSession: [] }]
+      responses: { "200": { description: OK } }
+
+  # ------------------------------------------------------------------ worker
+  /worker/claims:
+    post:
+      tags: [worker]
+      security: [{ workerCredential: [] }]
+      summary: Atomically claim the single top-priority eligible job (or report no work).
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      responses:
+        "200": { description: Claimed or no_work, content: { application/json: { schema: { $ref: "#/components/schemas/MutationSuccess" } } } }
+        "401": { $ref: "#/components/responses/Error" }
+  /worker/reconcile:
+    post:
+      tags: [worker]
+      security: [{ workerCredential: [] }]
+      summary: Explicit, authenticated lease-expiry reconciliation. GETs never mutate.
+      responses: { "200": { description: OK } }
+  /worker/jobs/{id}/start:
+    post: { tags: [worker], security: [{ workerCredential: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: "#/components/parameters/IdempotencyKey" }], responses: { "200": { description: OK }, "409": { $ref: "#/components/responses/Error" } } }
+  /worker/jobs/{id}/heartbeat:
+    post: { tags: [worker], security: [{ workerCredential: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: "#/components/parameters/IdempotencyKey" }], responses: { "200": { description: OK }, "409": { $ref: "#/components/responses/Error" } } }
+  /worker/jobs/{id}/events:
+    post: { tags: [worker], security: [{ workerCredential: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: "#/components/parameters/IdempotencyKey" }], responses: { "200": { description: OK } } }
+  /worker/jobs/{id}/complete:
+    post: { tags: [worker], security: [{ workerCredential: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: "#/components/parameters/IdempotencyKey" }], responses: { "200": { description: OK }, "409": { $ref: "#/components/responses/Error" } } }
+  /worker/jobs/{id}/fail:
+    post: { tags: [worker], security: [{ workerCredential: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: "#/components/parameters/IdempotencyKey" }], responses: { "200": { description: OK }, "409": { $ref: "#/components/responses/Error" } } }
+  /worker/jobs/{id}/cancelled:
+    post: { tags: [worker], security: [{ workerCredential: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string } }, { $ref: "#/components/parameters/IdempotencyKey" }], responses: { "200": { description: OK }, "409": { $ref: "#/components/responses/Error" } } }
+  /worker/artifacts/manifests:
+    post: { tags: [worker], security: [{ workerCredential: [] }], parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }], responses: { "201": { description: Created } } }
+  /worker/artifacts/content:
+    post:
+      tags: [worker]
+      security: [{ workerCredential: [] }]
+      summary: Upload approved bytes. Requires separate digest-specific publication authorization.
+      parameters: [{ $ref: "#/components/parameters/IdempotencyKey" }]
+      responses: { "201": { description: Created }, "409": { $ref: "#/components/responses/Error" } }

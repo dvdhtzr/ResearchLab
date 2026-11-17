@@ -1,0 +1,11 @@
+{
+  "contractVersion": "1.0",
+  "jobType": "research.investigation.v1",
+  "request": {
+    "question": "Compare SQL Server and PostgreSQL for a mid-sized OLTP workload",
+    "evidencePolicy": "hybrid-governed"
+  },
+  "executionProfile": "standard",
+  "priority": "normal",
+  "visibility": "private"
+}
