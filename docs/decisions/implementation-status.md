@@ -30,8 +30,8 @@ container cannot provide — they are verified on the **owner's Windows machine*
 | **M1 — First end-to-end job** | **GREEN** | Full HTTP API router + dev auth, minimal React Mission Control, standalone mock worker. 40/40 cloud-api tests (incl. `lifecycle.test.ts` driving Submit→Queued→Claimed→Running→Completed→Display over the real Worker) + 4/4 web RTL tests. Verified live: `wrangler dev` + mock-worker CLI + `scripts/smoke.sh` (exit 0, timeline `admitted,claimed,started,completed`). |
 | **M2 — Durable recovery** | **GREEN** | 12/12 `Infrastructure.Tests` pass on .NET 10.0.12 (owner's Windows box): crash survival, single-shot complete, idempotent outbox, checkpoint integrity/schema validation, budget preservation, stale-generation fencing, owner-controlled recovery. Solution builds clean. |
 | **M3 — Real Ollama execution** | **GREEN** | 26 model-free `Infrastructure.Tests` (gateway failure taxonomy, digest/registry checks, independent JSON validation, loopback-only security guard) + 3 live `Integration.Tests` against `qwen3.5:9b` (digest resolution, missing-model rejection, structured JSON response) via `scripts/check-ollama.ps1`. Ollama reached over REST (HttpClient), loopback-only, no SDK dependency. |
-| **M4 — Research Laboratory** | in progress | Governed evidence store, tool authorization, role-output validators (model-free), then a live Planner→Researcher→Skeptic→Report workflow. |
-| **M5 — Evaluation & Mission Control** | partial | Public/owner UI + publication/digest flow are model-free and done; the evaluation lanes depend on M3/M4. |
+| **M4 — Research Laboratory** | **GREEN** | 43 model-free `Infrastructure.Tests` (evidence governance, tool authorization, role validators, orchestrator with scripted client, JSON extraction) + live `Integration.Tests` research run: real Wikipedia evidence → `qwen3.5:9b` Planner→Researcher→Skeptic→Report, every finding validated against captured passages. Reasoning-model (`<think>`) output handled. |
+| **M5 — Evaluation & Mission Control** | in progress | Cloud publication/digest pipeline + public showcase (model-free, here), then three-lane evaluation (.NET). Cloud public projections already enforce privacy (M0/M1). |
 | **M6 — Public deployment** | NOT AUTHORIZED | Requires separate owner authorization. Never executed. |
 
 ## M0 verification evidence
@@ -62,11 +62,17 @@ container cannot provide — they are verified on the **owner's Windows machine*
 - `dotnet test Infrastructure.Tests` → **26/26** (adds 10 gateway + 4 loopback-guard to the M2 12).
 - `scripts/check-ollama.ps1` → **3/3** live against `qwen3.5:9b` on the owner's machine.
 
-## M4–M5 remaining
+## M4 verification evidence
 
-M4 (Research Laboratory) is implemented in two phases: model-free governance (evidence store, tool
-authorization, role-output validators) then a gated live Planner→Researcher→Skeptic→Report workflow.
-The M5 evaluation lanes depend on M4. See `docs/decisions/m2-m5-handoff.md`.
+- `dotnet test Infrastructure.Tests` → **43/43** (adds evidence governance, orchestrator, JSON extraction).
+- `scripts/check-ollama.ps1` → **4/4** live, incl. the end-to-end research workflow producing an
+  evidence-grounded report from a real Wikipedia article via `qwen3.5:9b`.
+
+## M5 remaining
+
+Implemented in phases: the cloud publication/digest pipeline + public showcase (TypeScript, verified in
+the cloud container), then the three evaluation lanes (.NET: technical + laboratory model-free, semantic
+gated live). See `docs/decisions/m2-m5-handoff.md`.
 
 ## What is explicitly NOT done / assumed
 
