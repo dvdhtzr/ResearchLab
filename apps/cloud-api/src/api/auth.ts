@@ -27,11 +27,17 @@ export function resolveOwner(request: Request, env: Env): Actor {
  * (a .dev.vars / secret binding), never from code. Credential-store validation
  * with rotation/revocation arrives with the worker_credentials table usage.
  */
+/** The well-known worker credential used only in local development. */
+export const DEV_WORKER_SECRET = "dev-worker-secret";
+
 export function resolveWorker(request: Request, env: Env): Actor {
   const auth = request.headers.get("Authorization") ?? "";
   const match = /^Bearer\s+(.+)$/i.exec(auth);
   const workerId = request.headers.get("X-Worker-Id");
-  const expected = env.RMC_WORKER_SHARED_SECRET;
+  // In local dev, fall back to the well-known dev secret (mirrors the owner dev-auth
+  // fallback) so the documented local flow works without a .dev.vars file. Production
+  // (non-local) always requires a configured secret and refuses dev auth entirely.
+  const expected = env.RMC_WORKER_SHARED_SECRET ?? (devAuthActive(env) ? DEV_WORKER_SECRET : undefined);
 
   if (!expected) {
     throw new ApiError("DEPENDENCY_UNAVAILABLE", "Worker credential is not configured.");
