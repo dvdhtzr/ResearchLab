@@ -1,0 +1,33 @@
+# Node / frontend
+node_modules/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Cloudflare / Wrangler local state
+.wrangler/
+apps/cloud-api/.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# .NET
+bin/
+obj/
+*.user
+
+# Local databases & secrets (never commit)
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+local-secrets/
+.secrets/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vs/
+*.swp
