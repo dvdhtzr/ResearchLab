@@ -1,26 +1,22 @@
 <Project>
   <!--
-    Central package management. Floating versions are enabled so the first restore
-    resolves the latest stable packages compatible with the installed .NET 10 SDK.
-    Per spec §5: pin these to the exact resolved versions after the first successful
-    build (run `dotnet list package` and replace the floating entries).
+    Central package management. Versions pinned to the exact set resolved on the
+    owner's .NET 10.0.401 machine (spec §5).
   -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Data + hosting (M2). Floor at 10.0.0 to track the installed .NET 10 runtime. -->
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.*" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.*" />
-    <!-- Test stack (latest stable). -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="*" />
-    <PackageVersion Include="xunit" Version="*" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="*" />
-    <!--
-      M3/M4 packages — added when those milestones are implemented, so the M2 restore
-      surface stays small and deterministic:
-        Microsoft.Extensions.AI, Microsoft.Extensions.AI.Abstractions, OllamaSharp, JsonSchema.Net
-    -->
+    <!-- Data + hosting. -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+    <!-- Test stack. -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
+  <!--
+    M3 talks to Ollama over its stable REST API via HttpClient (no SDK dependency).
+    M4 may add JsonSchema.Net for strict role-schema validation — pinned when added.
+  -->
 </Project>

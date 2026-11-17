@@ -1,24 +1,26 @@
 #!/usr/bin/env pwsh
 # check-ollama.ps1 — run ONLY the explicitly-enabled real-model integration tests (M3+).
-# These require a local Ollama with the approved model installed. If the prerequisites
-# are absent, this reports BLOCKED and exits nonzero — it never fabricates a pass.
+# Requires a local Ollama with the approved model (qwen3.5:9b) installed. If prerequisites
+# are absent it reports BLOCKED and exits nonzero — it never fabricates a pass.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
-if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
-  Write-Host "BLOCKED: ollama is not installed. M3+ live-model tests cannot run." -ForegroundColor Yellow
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+  Write-Host "BLOCKED: dotnet is not installed. M3+ live-model tests cannot run." -ForegroundColor Yellow
   exit 2
 }
-if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-  Write-Host "BLOCKED: dotnet is not installed. The .NET worker required for live-model tests is unavailable." -ForegroundColor Yellow
+if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
+  Write-Host "BLOCKED: ollama is not installed. The local model required for live tests is unavailable." -ForegroundColor Yellow
   exit 2
 }
 
-# The M3 test project is gated behind the RMC_OLLAMA_TESTS flag so it never runs by accident.
+# The live tests no-op unless this gate is set, so they never run by accident.
 $env:RMC_OLLAMA_TESTS = "1"
-Write-Host "Running real-model integration tests (RMC_OLLAMA_TESTS=1)…" -ForegroundColor Cyan
-Push-Location "$root"
-dotnet test --filter "Category=OllamaIntegration"
+Write-Host "Running live Ollama integration tests (requires qwen3.5:9b installed)..." -ForegroundColor Cyan
+Push-Location $root
+dotnet test .\tests\Integration.Tests\Integration.Tests.csproj -c Debug
 $code = $LASTEXITCODE
 Pop-Location
+
+$env:RMC_OLLAMA_TESTS = $null
 exit $code
