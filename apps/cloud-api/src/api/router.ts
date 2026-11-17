@@ -11,6 +11,15 @@ import {
 } from "../data/mutations.js";
 import { authorizeRecovery, requestCancel, setHold, setPriority } from "../data/control.js";
 import {
+  approveDigest,
+  getPublishedReport,
+  listPublications,
+  publishContent,
+  registerManifest,
+  revokeApproval,
+  withdrawReport,
+} from "../data/publication.js";
+import {
   getOwnerJob,
   getOwnerJobEvents,
   getPublicJob,
@@ -73,6 +82,11 @@ export async function handle(request: Request, env: Env): Promise<Response> {
         const ev = await getPublicJobEvents(db, seg[2]!);
         if (ev === null) throw new ApiError("NOT_FOUND", "Not found.");
         return json({ items: ev });
+      }
+      if (seg[1] === "reports" && seg.length === 3) {
+        const report = await getPublishedReport(db, seg[2]!);
+        if (!report) throw new ApiError("NOT_FOUND", "Not found.");
+        return json(report);
       }
       throw new ApiError("NOT_FOUND", "Unknown route.");
     }
@@ -145,6 +159,32 @@ export async function handle(request: Request, env: Env): Promise<Response> {
           }),
         );
       }
+      if (seg[1] === "publications" && seg.length === 2 && method === "GET") {
+        return json({ items: await listPublications(db, owner.id) });
+      }
+      if (seg[1] === "jobs" && seg.length === 4 && seg[3] === "publication" && method === "POST") {
+        requireIdempotencyKey(request);
+        const jobId = seg[2]!;
+        const body = (await readJsonBody(request)) as Record<string, unknown>;
+        switch (body.action) {
+          case "approve_digest":
+            return json(await approveDigest({
+              db, now, owner, jobId,
+              artifactId: reqStr(body, "artifactId"),
+              contentDigest: reqStr(body, "contentDigest"),
+            }));
+          case "revoke_approval":
+            return json(await revokeApproval({
+              db, now, owner, jobId,
+              artifactId: reqStr(body, "artifactId"),
+              contentDigest: reqStr(body, "contentDigest"),
+            }));
+          case "withdraw":
+            return json(await withdrawReport({ db, now, owner, jobId, reportId: reqStr(body, "reportId") }));
+          default:
+            throw new ApiError("INVALID_SCHEMA", "Unknown publication action.");
+        }
+      }
       throw new ApiError("NOT_FOUND", "Unknown route.");
     }
 
@@ -163,6 +203,27 @@ export async function handle(request: Request, env: Env): Promise<Response> {
       }
       if (seg[1] === "reconcile" && method === "POST") {
         return json(await reconcileExpiredLeases({ db, now, actor: worker }));
+      }
+      if (seg[1] === "artifacts" && seg[2] === "manifests" && method === "POST") {
+        requireIdempotencyKey(request);
+        const body = (await readJsonBody(request)) as Record<string, unknown>;
+        return json(await registerManifest({
+          db, now,
+          jobId: reqStr(body, "jobId"),
+          artifactVersion: typeof body.artifactVersion === "number" ? body.artifactVersion : 1,
+          schemaVersion: typeof body.schemaVersion === "string" ? body.schemaVersion : "public-report.v1",
+          contentDigest: reqStr(body, "contentDigest"),
+          contentLength: typeof body.contentLength === "number" ? body.contentLength : 0,
+          summary: body.summary,
+        }), 201);
+      }
+      if (seg[1] === "artifacts" && seg[2] === "content" && method === "POST") {
+        requireIdempotencyKey(request);
+        // The body is the EXACT approved bytes; read raw text and hash those exact bytes.
+        const jobId = url.searchParams.get("jobId") ?? "";
+        if (!jobId) throw new ApiError("INVALID_SCHEMA", "jobId query parameter is required.");
+        const rawBody = await request.text();
+        return json(await publishContent({ db, now, jobId, rawBody }), 201);
       }
       if (seg[1] === "jobs" && seg.length === 4 && method === "POST") {
         const jobId = seg[2]!;
@@ -221,6 +282,14 @@ function requireEnum<T extends string>(v: unknown, allowed: readonly T[]): T {
     throw new ApiError("INVALID_SCHEMA", `Expected one of: ${allowed.join(", ")}.`);
   }
   return v as T;
+}
+
+function reqStr(body: Record<string, unknown>, key: string): string {
+  const v = body[key];
+  if (typeof v !== "string" || v.length === 0) {
+    throw new ApiError("INVALID_SCHEMA", `${key} is required.`);
+  }
+  return v;
 }
 
 // Keep the Lease interface referenced for callers/towers of the worker protocol.

@@ -4,8 +4,9 @@
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location "$root/apps/cloud-api"
-# auth.test.ts (authz), lifecycle.test.ts (API guards + cross-owner isolation).
-npx vitest run tests/auth.test.ts tests/lifecycle.test.ts
+# auth (authz), lifecycle (API guards + cross-owner isolation), publication (digest
+# approval + private-never-public + no-reuse-of-changed-artifact).
+npx vitest run tests/auth.test.ts tests/lifecycle.test.ts tests/publication.test.ts
 $code = $LASTEXITCODE
 Pop-Location
 if ($code -ne 0) { Write-Host "check-security.ps1: FAILURES" -ForegroundColor Red; exit 1 }
