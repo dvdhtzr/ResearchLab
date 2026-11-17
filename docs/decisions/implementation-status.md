@@ -48,9 +48,21 @@ its acceptance tests actually pass, and BLOCKED when a required live-model/runti
 - Live-verified endpoints: owner admit/get/events/control, worker claim/start/complete, 401 on
   missing worker credential, 404 cross-owner isolation.
 
+## M2–M5 (BLOCKED here)
+
+Stopped autonomous advancement at the M2 gate: its acceptance is the fault-injection suite running on
+the real .NET Worker Service, which cannot be built or run without `dotnet`. M3–M5 additionally need a
+local Ollama model. See `docs/decisions/m2-m5-handoff.md`.
+
+Authored as **reviewable, explicitly-unverified design artifacts** (not claimed working):
+`Directory.Build.props`, `Directory.Packages.props`, `ResearchMissionControl.slnx`, `src/`+`tests/`
+project skeletons, the worker SQLite schema (`.../Migrations/0001_worker_core.sql`), a C# state-machine
+mirror, and research role schemas under `contracts/schemas/research/`.
+
 ## What is explicitly NOT done / assumed
 
 - No Cloudflare account, GitHub OAuth app, or worker credentials exist; production is blocked by design.
 - No Ollama models downloaded (prohibited to auto-download).
-- The .NET projects, if/when added, are authored but unverified until a Windows + .NET 10 + Ollama
-  environment runs them.
+- The .NET projects are authored as skeletons/design only — **unverified** (no restore/build/test here);
+  package versions are provisional. Treat M2+ as BLOCKED until a Windows + .NET 10 + Ollama environment
+  builds and passes the acceptance suites.

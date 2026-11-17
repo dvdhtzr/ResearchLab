@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- SQLite journals, checkpoints, outbox, cloud API client, secure storage -->
+  <!-- STATUS: unverified skeleton (no dotnet SDK in build env). -->
+  <PropertyGroup>
+    <RootNamespace>ResearchMissionControl.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ResearchMissionControl.Domain/ResearchMissionControl.Domain.csproj" />
+    <ProjectReference Include="../ResearchMissionControl.Application/ResearchMissionControl.Application.csproj" />
+  </ItemGroup>
+</Project>

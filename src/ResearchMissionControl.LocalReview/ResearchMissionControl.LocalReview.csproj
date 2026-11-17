@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- loopback-only local report viewer -->
+  <!-- STATUS: unverified skeleton (no dotnet SDK in build env). -->
+  <PropertyGroup>
+    <RootNamespace>ResearchMissionControl.LocalReview</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ResearchMissionControl.Domain/ResearchMissionControl.Domain.csproj" />
+    <ProjectReference Include="../ResearchMissionControl.Application/ResearchMissionControl.Application.csproj" />
+    <ProjectReference Include="../ResearchMissionControl.Infrastructure/ResearchMissionControl.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

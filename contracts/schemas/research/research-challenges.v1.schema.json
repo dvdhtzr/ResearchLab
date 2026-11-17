@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://researchmissioncontrol.local/schemas/research/research-challenges.v1.schema.json",
+  "title": "ResearchChallengesV1",
+  "description": "Skeptic output. Each challenge targets a real finding id and is classified. Supporting/contradicting evidence references validated by the host.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "challenges"],
+  "properties": {
+    "schemaVersion": { "const": "ResearchChallengesV1" },
+    "challenges": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["targetFindingId", "classification", "explanation"],
+        "properties": {
+          "targetFindingId": { "type": "string", "pattern": "^f[0-9]{1,4}$" },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "insufficient_evidence",
+              "contradiction",
+              "conflicting_sources",
+              "missing_context",
+              "reasoning_gap"
+            ]
+          },
+          "explanation": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "evidenceReferences": {
+            "type": "array",
+            "maxItems": 20,
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

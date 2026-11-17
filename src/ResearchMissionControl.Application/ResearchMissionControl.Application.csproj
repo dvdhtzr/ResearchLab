@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- use cases, orchestration ports, recovery/budget policies -->
+  <!-- STATUS: unverified skeleton (no dotnet SDK in build env). -->
+  <PropertyGroup>
+    <RootNamespace>ResearchMissionControl.Application</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ResearchMissionControl.Domain/ResearchMissionControl.Domain.csproj" />
+  </ItemGroup>
+</Project>
