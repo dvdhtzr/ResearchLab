@@ -77,3 +77,33 @@ export const api = {
     );
   },
 };
+
+export interface PublicJobView {
+  jobId: string;
+  state: string;
+  stage: string | null;
+  disposition: string | null;
+  updatedAt: string;
+}
+
+export interface PublicReportView {
+  schemaVersion: string;
+  reportVersion: number;
+  question: string;
+  executiveSummary: string;
+  findings: { id: string; statement: string; evidence: string[]; limitations?: string }[];
+  challenges: { target: string; classification: string; explanation: string }[];
+  remainingUncertainties?: string[];
+  disposition: string;
+  limitations?: string;
+}
+
+export const publicApi = {
+  async listJobs(): Promise<PublicJobView[]> {
+    const data = await parse<{ items: PublicJobView[] }>(await fetch("/api/v1/public/jobs"));
+    return data.items;
+  },
+  async getReport(reportId: string): Promise<PublicReportView> {
+    return parse(await fetch(`/api/v1/public/reports/${reportId}`));
+  },
+};
