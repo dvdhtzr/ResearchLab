@@ -17,7 +17,9 @@ function Cleanup { if ($wrangler) { Stop-Process -Id $wrangler.Id -ErrorAction S
 try {
   Push-Location "$root/apps/cloud-api"
   npx wrangler d1 migrations apply rmc-local --local | Out-Null
-  if (-not (Test-Path ".dev.vars")) { "RMC_WORKER_SHARED_SECRET=$secret" | Out-File ".dev.vars" }
+  # Set-Content with ascii avoids the UTF-16 BOM that Windows PowerShell 5.1 Out-File
+  # would add (which breaks wrangler's .dev.vars parser).
+  if (-not (Test-Path ".dev.vars")) { Set-Content -Path ".dev.vars" -Value "RMC_WORKER_SHARED_SECRET=$secret" -Encoding ascii }
 
   $wrangler = Start-Process npx -ArgumentList "wrangler dev --port $port --local --ip 127.0.0.1" -PassThru -NoNewWindow
   Pop-Location
