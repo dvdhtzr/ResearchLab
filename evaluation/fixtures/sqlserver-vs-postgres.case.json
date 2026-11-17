@@ -1,0 +1,11 @@
+{
+  "caseId": "case-sqlserver-vs-postgres",
+  "provisional": true,
+  "_note": "SYNTHETIC engineering fixture — NOT independently-validated research truth. Labeled provisional until independently reviewed (spec §26, Lane 3).",
+  "question": "Compare SQL Server and PostgreSQL for a mid-sized OLTP workload",
+  "referencePassages": [
+    { "id": "p1", "text": "PostgreSQL uses multiversion concurrency control (MVCC)." },
+    { "id": "p2", "text": "SQL Server supports snapshot isolation." }
+  ],
+  "expectedDisposition": "supported"
+}
