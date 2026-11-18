@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using ResearchMissionControl.Application;
 using ResearchMissionControl.Domain;
 using ResearchMissionControl.Infrastructure;
 using Xunit;
@@ -93,5 +94,47 @@ public sealed class M4ResearchLiveTests
         Assert.True(result.EvidenceSnapshots >= 2,
             $"expected balanced evidence from both entities, got {result.EvidenceSnapshots} snapshot(s): {result.InconclusiveReason}");
         Assert.True(result.Completed, $"comparison research did not complete: {result.InconclusiveReason}");
+    }
+
+    [Fact]
+    public async Task MultiSource_GroundsOnWikipediaAndWikidata()
+    {
+        if (!Enabled) return;
+
+        using var conn = NewDb();
+        using var client = new OllamaInferenceClient();
+        using var wikipedia = new WikipediaSourceAdapter();
+        using var wikidata = new WikidataSourceAdapter();
+
+        var registry = new ModelRegistry(new[] { new ApprovedModel("qwen3.5:9b", null) });
+        var gateway = new InferenceGateway(client, registry, new OperationJournalStore(conn), new ReservationStore(conn));
+        var evidence = new EvidenceStore(conn);
+
+        // Two approved free sources behind the governed acquisition layer.
+        var search = new CompositeSourceSearch(new ISourceSearch[] { wikipedia, wikidata });
+        var sources = new CompositeSourceAdapter(new Dictionary<string, ISourceAdapter>
+        {
+            [WikipediaSourceAdapter.AllowedHost] = wikipedia,
+            [WikidataSourceAdapter.AllowedHost] = wikidata,
+        });
+        var acquisition = new EvidenceAcquisition(sources, evidence, ToolRegistry.Default());
+        var orchestrator = new ResearchOrchestrator(gateway, search, acquisition, evidence, "qwen3.5:9b");
+
+        var result = await orchestrator.RunAsync(
+            "job-live-multi", 1, "What is PostgreSQL?", Budgets.For(ExecutionProfile.Standard), CancellationToken.None);
+
+        _output.WriteLine($"completed={result.Completed} disposition={result.Disposition} " +
+                          $"evidence={result.EvidenceSnapshots} attempts={result.ModelAttempts} " +
+                          $"reason={result.InconclusiveReason}");
+        if (result.Report is not null)
+            _output.WriteLine($"summary: {result.Report.ExecutiveSummary}");
+
+        // Deterministic: the workflow ran and captured real evidence.
+        Assert.True(result.EvidenceSnapshots >= 1, "expected at least one evidence snapshot");
+        // Strong signal: evidence gathered from BOTH sources (Wikipedia prose + Wikidata facts)
+        // for a single entity — the multi-source merge fetched one document from each.
+        Assert.True(result.EvidenceSnapshots >= 2,
+            $"expected multi-source evidence (Wikipedia + Wikidata), got {result.EvidenceSnapshots}: {result.InconclusiveReason}");
+        Assert.True(result.Completed, $"multi-source research did not complete: {result.InconclusiveReason}");
     }
 }

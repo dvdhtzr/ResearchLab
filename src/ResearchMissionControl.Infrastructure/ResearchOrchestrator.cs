@@ -85,9 +85,20 @@ public sealed class ResearchOrchestrator
         foreach (var url in SelectBalancedUrls(hitsByQuery))
         {
             var proposal = new ToolProposal("source.fetch.v1", $"{{\"url\":{JsonSerializer.Serialize(url)}}}");
-            var acquired = await _acquisition.FetchAsync(jobId, proposal, url, cancellationToken).ConfigureAwait(false);
-            if (acquired is not null && acquired.PassageIds.Count > 0)
-                docPassages.Add(acquired.PassageIds.ToList());
+            try
+            {
+                var acquired = await _acquisition.FetchAsync(jobId, proposal, url, cancellationToken).ConfigureAwait(false);
+                if (acquired is not null && acquired.PassageIds.Count > 0)
+                    docPassages.Add(acquired.PassageIds.ToList());
+            }
+            catch (InferenceTransportException)
+            {
+                // One source failed to fetch; continue with the others (fail soft per source).
+            }
+            catch (ArgumentException)
+            {
+                // Unapproved/malformed URL for this source; skip it (fail closed on that source).
+            }
         }
         if (docPassages.Count == 0)
             return ResearchResult.Inconclusive("no_evidence", attempts, _evidence.CountSnapshots(jobId));

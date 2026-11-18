@@ -72,6 +72,18 @@ public sealed class M4OrchestratorTests
         }
     }
 
+    // Throws for the MySQL article (one source/host failing mid-run), succeeds for PostgreSQL.
+    private sealed class FlakySource : ISourceAdapter
+    {
+        public Task<SourceDocument> FetchAsync(string url, CancellationToken cancellationToken)
+        {
+            if (url.Contains("MySQL", StringComparison.OrdinalIgnoreCase))
+                throw new InferenceTransportException("mysql source down");
+            return Task.FromResult(new SourceDocument(
+                url, "PostgreSQL", "PostgreSQL uses MVCC for concurrency control.", "wikipedia:en:PostgreSQL"));
+        }
+    }
+
     private static ResearchOrchestrator Build(
         Microsoft.Data.Sqlite.SqliteConnection conn,
         ScriptedClient client,
@@ -173,5 +185,24 @@ public sealed class M4OrchestratorTests
 
         Assert.Contains("f1", result.AcceptedFindingIds);
         Assert.Contains("f2", result.AcceptedFindingIds);
+    }
+
+    [Fact]
+    public async Task OneSourceFetchFailure_StillCompletesOnTheHealthySource()
+    {
+        using var db = new TestDb();
+        var client = new ScriptedClient(
+            "{\"queries\":[\"PostgreSQL\",\"MySQL\"],\"comparison\":true}",
+            "{\"findings\":[{\"id\":\"f1\",\"statement\":\"PostgreSQL uses MVCC\",\"evidence\":[\"p1\"],\"limitations\":\"\"}]}",
+            "{\"challenges\":[]}",
+            "{\"summary\":\"PostgreSQL uses MVCC.\",\"findingIds\":[\"f1\"],\"disposition\":\"supported\"}");
+        // Two queries → fetch order [PostgreSQL, MySQL]; the MySQL fetch throws and is skipped.
+        var orchestrator = Build(db.Open(), client, new TwoEntitySearch(), new FlakySource());
+
+        var result = await orchestrator.RunAsync(
+            "job-flaky", 1, "Compare PostgreSQL and MySQL", Budgets.For(ExecutionProfile.Standard), CancellationToken.None);
+
+        Assert.True(result.Completed, result.InconclusiveReason);
+        Assert.Equal(1, result.EvidenceSnapshots); // only the healthy source produced evidence
     }
 }

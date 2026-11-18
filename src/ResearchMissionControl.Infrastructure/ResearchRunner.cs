@@ -33,12 +33,22 @@ public sealed class ResearchRunner : IResearchRunner
         using var connection = WorkerDatabase.Open(dbPath);
         using var inference = new OllamaInferenceClient(_ollamaBaseUrl);
         using var wikipedia = new WikipediaSourceAdapter();
+        using var wikidata = new WikidataSourceAdapter();
 
         var registry = new ModelRegistry(new[] { new ApprovedModel(_modelId, null) });
         var gateway = new InferenceGateway(inference, registry, new OperationJournalStore(connection), new ReservationStore(connection));
         var evidence = new EvidenceStore(connection);
-        var acquisition = new EvidenceAcquisition(wikipedia, evidence, ToolRegistry.Default());
-        var orchestrator = new ResearchOrchestrator(gateway, wikipedia, acquisition, evidence, _modelId);
+
+        // Multiple approved free sources behind the governed acquisition layer: Wikipedia
+        // prose + Wikidata structured facts. Search fans out and merges; fetch routes by host.
+        var search = new CompositeSourceSearch(new ISourceSearch[] { wikipedia, wikidata });
+        var sources = new CompositeSourceAdapter(new Dictionary<string, ISourceAdapter>
+        {
+            [WikipediaSourceAdapter.AllowedHost] = wikipedia,
+            [WikidataSourceAdapter.AllowedHost] = wikidata,
+        });
+        var acquisition = new EvidenceAcquisition(sources, evidence, ToolRegistry.Default());
+        var orchestrator = new ResearchOrchestrator(gateway, search, acquisition, evidence, _modelId);
 
         var result = await orchestrator.RunAsync(jobId, generation, question, budget, cancellationToken).ConfigureAwait(false);
 

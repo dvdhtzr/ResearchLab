@@ -48,7 +48,7 @@ public sealed class EvidenceAcquisition
         var snapshotId = _idFactory();
         _store.SaveSnapshot(
             snapshotId, jobId, document.SourceIdentity, document.Url, _clock(),
-            ComputeDigest(document.Text), null, "fetched", "ok");
+            ComputeDigest(document.Text), document.Rights, "fetched", "ok");
 
         var passageIds = new List<string>();
         var chunks = Chunk(document.Text, PassageMaxChars);

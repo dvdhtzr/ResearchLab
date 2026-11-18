@@ -9,7 +9,7 @@ namespace ResearchMissionControl.Infrastructure;
 // documents are treated as untrusted data. No commercial search API, no paid service.
 public sealed class WikipediaSourceAdapter : ISourceSearch, ISourceAdapter, IDisposable
 {
-    private const string AllowedHost = "en.wikipedia.org";
+    public const string AllowedHost = "en.wikipedia.org";
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
 
@@ -79,7 +79,8 @@ public sealed class WikipediaSourceAdapter : ISourceSearch, ISourceAdapter, IDis
                 }
             }
         }
-        return new SourceDocument(url, title, text, $"wikipedia:en:{title}");
+        // Wikipedia article prose is licensed CC BY-SA 4.0 (recorded as rights metadata).
+        return new SourceDocument(url, title, text, $"wikipedia:en:{title}", "CC BY-SA 4.0");
     }
 
     private async Task<string> GetAsync(string requestUri, CancellationToken cancellationToken)
