@@ -137,4 +137,25 @@ public sealed class M4ResearchLiveTests
             $"expected multi-source evidence (Wikipedia + Wikidata), got {result.EvidenceSnapshots}: {result.InconclusiveReason}");
         Assert.True(result.Completed, $"multi-source research did not complete: {result.InconclusiveReason}");
     }
+
+    [Fact]
+    public async Task ArxivAdapter_SearchesAndFetchesARealAbstract()
+    {
+        if (!Enabled) return;
+
+        using var arxiv = new ArxivSourceAdapter();
+
+        var hits = await arxiv.SearchAsync("attention is all you need transformer", 3, CancellationToken.None);
+        _output.WriteLine($"arxiv hits={hits.Count}");
+        Assert.NotEmpty(hits);
+        Assert.All(hits, hit => Assert.StartsWith("https://export.arxiv.org/abs/", hit.Url));
+
+        var document = await arxiv.FetchAsync(hits[0].Url, CancellationToken.None);
+        _output.WriteLine($"arxiv title={document.Title}");
+        _output.WriteLine($"arxiv text (first 160): {document.Text[..System.Math.Min(160, document.Text.Length)]}");
+
+        Assert.StartsWith("arxiv:", document.SourceIdentity);
+        Assert.Equal("CC0 1.0", document.Rights);
+        Assert.Contains("Abstract:", document.Text); // a real abstract was captured
+    }
 }

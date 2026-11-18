@@ -34,18 +34,21 @@ public sealed class ResearchRunner : IResearchRunner
         using var inference = new OllamaInferenceClient(_ollamaBaseUrl);
         using var wikipedia = new WikipediaSourceAdapter();
         using var wikidata = new WikidataSourceAdapter();
+        using var arxiv = new ArxivSourceAdapter();
 
         var registry = new ModelRegistry(new[] { new ApprovedModel(_modelId, null) });
         var gateway = new InferenceGateway(inference, registry, new OperationJournalStore(connection), new ReservationStore(connection));
         var evidence = new EvidenceStore(connection);
 
         // Multiple approved free sources behind the governed acquisition layer: Wikipedia
-        // prose + Wikidata structured facts. Search fans out and merges; fetch routes by host.
-        var search = new CompositeSourceSearch(new ISourceSearch[] { wikipedia, wikidata });
+        // prose + Wikidata structured facts + arXiv scholarly abstracts. Search fans out and
+        // merges across sources; fetch routes by host.
+        var search = new CompositeSourceSearch(new ISourceSearch[] { wikipedia, wikidata, arxiv });
         var sources = new CompositeSourceAdapter(new Dictionary<string, ISourceAdapter>
         {
             [WikipediaSourceAdapter.AllowedHost] = wikipedia,
             [WikidataSourceAdapter.AllowedHost] = wikidata,
+            [ArxivSourceAdapter.AllowedHost] = arxiv,
         });
         var acquisition = new EvidenceAcquisition(sources, evidence, ToolRegistry.Default());
         var orchestrator = new ResearchOrchestrator(gateway, search, acquisition, evidence, _modelId);
