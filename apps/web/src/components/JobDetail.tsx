@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api.js";
-import type { JobEventView, OwnerJobView } from "../types.js";
+import type { JobEventView, JobProgressView, OwnerJobView } from "../types.js";
 import { StateBadge } from "./StateBadge.js";
 
 const EVENT_LABELS: Record<string, string> = {
@@ -20,9 +20,19 @@ const EVENT_LABELS: Record<string, string> = {
   recovery_terminated: "Recovery: terminated",
 };
 
-export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () => void }) {
+export function JobDetail({
+  jobId,
+  onChanged,
+  onDeleted,
+}: {
+  jobId: string;
+  onChanged: () => void;
+  onDeleted: () => void;
+}) {
   const [job, setJob] = useState<OwnerJobView | null>(null);
   const [events, setEvents] = useState<JobEventView[]>([]);
+  const [progress, setProgress] = useState<JobProgressView[]>([]);
+  const [verbose, setVerbose] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,6 +44,10 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
         setJob(j);
         setEvents(ev);
         setError(null);
+        if (verbose) {
+          const pr = await api.getProgress(jobId);
+          if (active) setProgress(pr);
+        }
       } catch (err) {
         if (active) setError(err instanceof ApiError ? err.message : "Failed to load");
       }
@@ -44,7 +58,7 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
       active = false;
       clearInterval(t);
     };
-  }, [jobId]);
+  }, [jobId, verbose]);
 
   async function control(action: string) {
     try {
@@ -52,6 +66,16 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? `${err.code}: ${err.message}` : "Control failed");
+    }
+  }
+
+  async function remove() {
+    if (!window.confirm("Delete this investigation and all of its records? This cannot be undone.")) return;
+    try {
+      await api.deleteJob(jobId);
+      onDeleted();
+    } catch (err) {
+      setError(err instanceof ApiError ? `${err.code}: ${err.message}` : "Delete failed");
     }
   }
 
@@ -63,6 +87,7 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
   const canHold = job.state === "Queued" && !job.holdRequested;
   const canRelease = job.state === "Queued" && job.holdRequested;
   const canCancel = ["Queued", "Claimed", "Running"].includes(job.state);
+  const running = ["Claimed", "Running"].includes(job.state);
 
   return (
     <div className="panel" aria-label="Job detail">
@@ -74,11 +99,43 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
       {job.currentStage && <p className="eat">Stage: {job.currentStage}</p>}
       {job.researchDisposition && <p className="eat">Disposition: {job.researchDisposition}</p>}
 
-      <div className="row" style={{ marginBottom: 12 }}>
+      <div className="row" style={{ marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
         <button className="secondary" disabled={!canHold} onClick={() => control("hold")}>Hold</button>
         <button className="secondary" disabled={!canRelease} onClick={() => control("release")}>Release</button>
         <button className="secondary" disabled={!canCancel} onClick={() => control("request_cancel")}>Cancel</button>
+        <button className="danger" onClick={remove}>Delete</button>
+        <label className="toggle" title="Show the worker's detailed live progress stream">
+          <input type="checkbox" checked={verbose} onChange={(e) => setVerbose(e.target.checked)} />
+          <span>Verbose</span>
+        </label>
       </div>
+
+      {error && job && <p className="error" role="alert">{error}</p>}
+
+      {verbose && (
+        <section aria-label="Live progress" style={{ marginBottom: 16 }}>
+          <h2>Live progress {running ? "· running" : ""}</h2>
+          {progress.length === 0 ? (
+            <p className="empty">No verbose progress recorded yet{running ? " — waiting for the worker…" : "."}</p>
+          ) : (
+            <ol className="timeline progress">
+              {progress.map((p) => (
+                <li key={p.sequence}>
+                  <div className="etype">
+                    <span className={`stage stage-${p.stage}`}>{p.stage}</span>{" "}
+                    {p.message}
+                    {p.level === "detail" && <span className="eat"> · detail</span>}
+                  </div>
+                  <div className="eat">{new Date(p.at).toLocaleTimeString()}</div>
+                  {hasDetail(p.detail) && (
+                    <pre className="detail">{JSON.stringify(p.detail, null, 2)}</pre>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
 
       {report && (
         <section aria-label="Research report" style={{ marginBottom: 16 }}>
@@ -117,6 +174,10 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
       )}
     </div>
   );
+}
+
+function hasDetail(detail: unknown): boolean {
+  return !!detail && typeof detail === "object" && Object.keys(detail as object).length > 0;
 }
 
 interface ReportView {

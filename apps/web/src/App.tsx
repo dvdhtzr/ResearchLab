@@ -71,7 +71,14 @@ export function App() {
         </div>
         <div>
           {selected ? (
-            <JobDetail jobId={selected} onChanged={refresh} />
+            <JobDetail
+              jobId={selected}
+              onChanged={refresh}
+              onDeleted={() => {
+                setSelected(null);
+                refresh();
+              }}
+            />
           ) : (
             <div className="panel"><p className="empty">Select an investigation to see its live timeline.</p></div>
           )}

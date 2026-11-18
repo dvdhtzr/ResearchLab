@@ -27,6 +27,8 @@ import {
   listOwnerJobs,
   listPublicJobs,
 } from "../data/jobs-repo.js";
+import { deleteOwnerJob } from "../data/delete.js";
+import { appendProgress, getOwnerJobProgress, parseProgressEntries } from "../data/progress.js";
 import { CONTRACT_VERSION, type Actor } from "../data/types.js";
 import type { Env } from "../index.js";
 import {
@@ -117,10 +119,18 @@ export async function handle(request: Request, env: Env): Promise<Response> {
         if (!j) throw new ApiError("NOT_FOUND", "Not found.");
         return json(j);
       }
+      if (seg[1] === "jobs" && seg.length === 3 && method === "DELETE") {
+        return json(await deleteOwnerJob({ db, owner, jobId: seg[2]! }));
+      }
       if (seg[1] === "jobs" && seg.length === 4 && seg[3] === "events" && method === "GET") {
         const ev = await getOwnerJobEvents(db, owner.id, seg[2]!);
         if (ev === null) throw new ApiError("NOT_FOUND", "Not found.");
         return json({ items: ev });
+      }
+      if (seg[1] === "jobs" && seg.length === 4 && seg[3] === "progress" && method === "GET") {
+        const pv = await getOwnerJobProgress(db, owner.id, seg[2]!);
+        if (pv === null) throw new ApiError("NOT_FOUND", "Not found.");
+        return json({ items: pv });
       }
       if (seg[1] === "jobs" && seg.length === 4 && seg[3] === "control" && method === "POST") {
         const key = requireIdempotencyKey(request);
@@ -224,6 +234,16 @@ export async function handle(request: Request, env: Env): Promise<Response> {
         if (!jobId) throw new ApiError("INVALID_SCHEMA", "jobId query parameter is required.");
         const rawBody = await request.text();
         return json(await publishContent({ db, now, jobId, rawBody }), 201);
+      }
+      if (seg[1] === "jobs" && seg.length === 4 && seg[3] === "progress" && method === "POST") {
+        // Best-effort verbose progress (lease-fenced). Not a state transition, no idempotency key.
+        const jobId = seg[2]!;
+        const body = (await readJsonBody(request)) as Record<string, unknown>;
+        const lease = leaseFromBody(worker, body);
+        return json(await appendProgress({
+          db, now, worker, jobId, leaseId: lease.leaseId, generation: lease.generation,
+          entries: parseProgressEntries(body.entries),
+        }));
       }
       if (seg[1] === "jobs" && seg.length === 4 && method === "POST") {
         const jobId = seg[2]!;

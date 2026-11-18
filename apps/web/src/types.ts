@@ -37,6 +37,16 @@ export interface JobEventView {
   details: unknown;
 }
 
+export interface JobProgressView {
+  sequence: number;
+  executionGeneration: number;
+  stage: string;
+  level: string;
+  message: string;
+  detail: unknown;
+  at: string;
+}
+
 export interface ApiErrorBody {
   contractVersion: string;
   error: { code: string; message: string; retryable: boolean };

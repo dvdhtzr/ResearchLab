@@ -1,4 +1,4 @@
-import type { JobEventView, OwnerJobView } from "./types.js";
+import type { JobEventView, JobProgressView, OwnerJobView } from "./types.js";
 
 export class ApiError extends Error {
   code: string;
@@ -48,6 +48,15 @@ export const api = {
   async getEvents(jobId: string): Promise<JobEventView[]> {
     const data = await parse<{ items: JobEventView[] }>(await fetch(`/api/v1/owner/jobs/${jobId}/events`));
     return data.items;
+  },
+
+  async getProgress(jobId: string): Promise<JobProgressView[]> {
+    const data = await parse<{ items: JobProgressView[] }>(await fetch(`/api/v1/owner/jobs/${jobId}/progress`));
+    return data.items;
+  },
+
+  async deleteJob(jobId: string): Promise<{ deleted: boolean; jobId: string }> {
+    return parse(await fetch(`/api/v1/owner/jobs/${jobId}`, { method: "DELETE" }));
   },
 
   async createJob(input: NewJobInput): Promise<{ jobId: string }> {
