@@ -28,6 +28,9 @@ public sealed class ResearchOrchestrator
 {
     private const int MaxPromptPassages = 6;
     private const int MaxPassageChars = 500;
+    private const int SearchHitsPerQuery = 3;
+    private const int MaxDocumentsPerQuery = 2;
+    private const int MaxDocumentsTotal = 4;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -60,31 +63,40 @@ public sealed class ResearchOrchestrator
     {
         var attempts = 0;
 
-        // 1. Plan (deterministic): extract the salient search terms from the question.
-        var query = QueryPlanner.PlanQuery(question);
-        var hits = await _search.SearchAsync(query, 3, cancellationToken).ConfigureAwait(false);
-        if (hits.Count == 0)
+        // 1. Plan: the model PROPOSES targeted search queries (and splits comparisons into one
+        //    query per entity); PlanValidator AUTHORIZES them. A failed or unusable proposal
+        //    degrades to deterministic keyword planning, so planning never leaves us worse off.
+        var plan = await PlanAsync(jobId, generation, question, budget, attempts, cancellationToken).ConfigureAwait(false);
+        attempts++; // the planner attempt is budgeted whether or not the model succeeded
+
+        // 2. Acquire authorized evidence, BALANCED across the planned queries. Each query is
+        //    searched independently and documents are fetched round-robin, so a comparison
+        //    grounds on every entity instead of only the first article's passages.
+        var hitsByQuery = new List<List<SourceHit>>(plan.Queries.Count);
+        foreach (var query in plan.Queries)
+        {
+            var hits = await _search.SearchAsync(query, SearchHitsPerQuery, cancellationToken).ConfigureAwait(false);
+            hitsByQuery.Add(hits.ToList());
+        }
+        if (hitsByQuery.All(hits => hits.Count == 0))
             return ResearchResult.Inconclusive("no_sources", attempts, 0);
 
-        // 2. Acquire authorized evidence from the top hits (bounded), for broader grounding.
-        var acquiredPassages = new List<string>();
-        foreach (var hit in hits.Take(2))
+        var docPassages = new List<List<string>>();
+        foreach (var url in SelectBalancedUrls(hitsByQuery))
         {
-            var proposal = new ToolProposal("source.fetch.v1", $"{{\"url\":{JsonSerializer.Serialize(hit.Url)}}}");
-            var acquired = await _acquisition.FetchAsync(jobId, proposal, hit.Url, cancellationToken).ConfigureAwait(false);
-            if (acquired is not null)
-                acquiredPassages.AddRange(acquired.PassageIds);
-            if (acquiredPassages.Count >= MaxPromptPassages)
-                break;
+            var proposal = new ToolProposal("source.fetch.v1", $"{{\"url\":{JsonSerializer.Serialize(url)}}}");
+            var acquired = await _acquisition.FetchAsync(jobId, proposal, url, cancellationToken).ConfigureAwait(false);
+            if (acquired is not null && acquired.PassageIds.Count > 0)
+                docPassages.Add(acquired.PassageIds.ToList());
         }
-        if (acquiredPassages.Count == 0)
+        if (docPassages.Count == 0)
             return ResearchResult.Inconclusive("no_evidence", attempts, _evidence.CountSnapshots(jobId));
 
         var labelToId = new Dictionary<string, string>(StringComparer.Ordinal);
         var passageBlock = new StringBuilder();
-        var labeled = acquiredPassages.Count > MaxPromptPassages
-            ? acquiredPassages.Take(MaxPromptPassages).ToList()
-            : acquiredPassages;
+        // Interleave passages across documents so both sides of a comparison reach the model
+        // even when one article is far longer than the other.
+        var labeled = InterleavePassages(docPassages, MaxPromptPassages);
         for (var i = 0; i < labeled.Count; i++)
         {
             var label = "p" + (i + 1);
@@ -151,6 +163,71 @@ public sealed class ResearchOrchestrator
             _evidence.CountSnapshots(jobId), attempts, null);
     }
 
+    // Model-assisted planning: propose search queries, then authorize them. Any failure
+    // (transport, budget, invalid output) falls back to the deterministic single query.
+    private async Task<ResearchPlan> PlanAsync(
+        string jobId,
+        long generation,
+        string question,
+        BudgetSnapshot budget,
+        int attempts,
+        CancellationToken cancellationToken)
+    {
+        var request = new InferenceRequest(
+            jobId, generation, _modelId, "planner", "plan",
+            PlannerPrompt(question), new[] { "queries" });
+        var outcome = await _gateway.ExecuteAsync(request, generation, budget, attempts, cancellationToken).ConfigureAwait(false);
+        if (!outcome.Success)
+            return new ResearchPlan(new[] { QueryPlanner.PlanQuery(question) }, false);
+
+        var dto = ParsePlan(outcome.Json!);
+        return PlanValidator.Validate(dto.Queries, dto.Comparison ?? false, question);
+    }
+
+    // Round-robin document selection across the planned queries: take the top hit of each
+    // query before any query's second hit, bounded per-query and in total. Guarantees a
+    // two-entity comparison fetches a document for each entity before a second for either.
+    private static List<string> SelectBalancedUrls(IReadOnlyList<List<SourceHit>> hitsByQuery)
+    {
+        var urls = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var round = 0; round < MaxDocumentsPerQuery; round++)
+        {
+            foreach (var hits in hitsByQuery)
+            {
+                if (round >= hits.Count)
+                    continue;
+                var url = hits[round].Url;
+                if (!seen.Add(url))
+                    continue;
+                urls.Add(url);
+                if (urls.Count >= MaxDocumentsTotal)
+                    return urls;
+            }
+        }
+        return urls;
+    }
+
+    // Interleave each document's ordered passages (doc1.p0, doc2.p0, doc1.p1, ...) up to the
+    // prompt cap, so no single long document crowds the others out of the evidence block.
+    private static List<string> InterleavePassages(IReadOnlyList<List<string>> docPassages, int max)
+    {
+        var result = new List<string>();
+        var longest = docPassages.Count == 0 ? 0 : docPassages.Max(doc => doc.Count);
+        for (var i = 0; i < longest && result.Count < max; i++)
+        {
+            foreach (var doc in docPassages)
+            {
+                if (i >= doc.Count)
+                    continue;
+                result.Add(doc[i]);
+                if (result.Count >= max)
+                    break;
+            }
+        }
+        return result;
+    }
+
     private static string DeriveDisposition(int challengeCount) =>
         challengeCount == 0 ? "supported" : "mixed";
 
@@ -158,6 +235,19 @@ public sealed class ResearchOrchestrator
         text.Length > max ? text[..max] : text;
 
     // ---- prompts ----
+
+    private static string PlannerPrompt(string question) =>
+        "You are a research planner. Propose the search queries that will find the best " +
+        "encyclopedia evidence to answer the question.\n" +
+        "- Use a single query for a simple factual question.\n" +
+        "- For a comparison or recommendation (\"X vs Y\", \"compare X and Y\", \"alternatives to X\"), " +
+        "produce a SEPARATE query for EACH entity so each is researched on its own.\n" +
+        "- Each query is short keywords (an encyclopedia topic or title), not a full sentence. " +
+        "At most 3 queries.\n\n" +
+        $"Question: {question}\n\n" +
+        "Respond with ONLY a JSON object of this exact shape:\n" +
+        "{\"queries\":[\"...\"],\"comparison\":false}\n" +
+        "Set \"comparison\" to true only when the question compares or chooses between multiple entities.";
 
     private static string ResearcherPrompt(string question, string passages) =>
         "You are a research analyst. Using ONLY the numbered evidence passages below, extract findings that help " +
@@ -193,6 +283,12 @@ public sealed class ResearchOrchestrator
     }
 
     // ---- parsing (defensive: model variability degrades to inconclusive, never a crash) ----
+
+    private static PlanDto ParsePlan(string json)
+    {
+        try { return JsonSerializer.Deserialize<PlanDto>(json, JsonOptions) ?? new PlanDto(null, null); }
+        catch (JsonException) { return new PlanDto(null, null); }
+    }
 
     private List<Finding> ParseFindings(string json, IReadOnlyDictionary<string, string> labelToId)
     {
@@ -238,6 +334,10 @@ public sealed class ResearchOrchestrator
             return new ReportDto(null, null, null);
         }
     }
+
+    private sealed record PlanDto(
+        [property: JsonPropertyName("queries")] List<string>? Queries,
+        [property: JsonPropertyName("comparison")] bool? Comparison);
 
     private sealed record FindingsDto(
         [property: JsonPropertyName("findings")] List<FindingDto>? Findings);

@@ -56,4 +56,42 @@ public sealed class M4ResearchLiveTests
         // Strong signal (may surface model variability — reason is printed above if it fails).
         Assert.True(result.Completed, $"research did not complete: {result.InconclusiveReason}");
     }
+
+    [Fact]
+    public async Task ComparisonQuestion_GroundsEvidenceFromBothEntities()
+    {
+        if (!Enabled) return;
+
+        using var conn = NewDb();
+        using var client = new OllamaInferenceClient();
+        using var wikipedia = new WikipediaSourceAdapter();
+
+        var registry = new ModelRegistry(new[] { new ApprovedModel("qwen3.5:9b", null) });
+        var gateway = new InferenceGateway(client, registry, new OperationJournalStore(conn), new ReservationStore(conn));
+        var evidence = new EvidenceStore(conn);
+        var acquisition = new EvidenceAcquisition(wikipedia, evidence, ToolRegistry.Default());
+        var orchestrator = new ResearchOrchestrator(gateway, wikipedia, acquisition, evidence, "qwen3.5:9b");
+
+        var result = await orchestrator.RunAsync(
+            "job-live-cmp", 1, "Compare PostgreSQL and MySQL", Budgets.For(ExecutionProfile.Standard), CancellationToken.None);
+
+        _output.WriteLine($"completed={result.Completed} disposition={result.Disposition} " +
+                          $"evidence={result.EvidenceSnapshots} attempts={result.ModelAttempts} " +
+                          $"reason={result.InconclusiveReason}");
+        if (result.Report is not null)
+            _output.WriteLine($"summary: {result.Report.ExecutiveSummary}");
+
+        // Deterministic: the workflow ran and captured real Wikipedia evidence.
+        Assert.True(result.EvidenceSnapshots >= 1, "expected at least one evidence snapshot");
+        if (result.Completed)
+        {
+            Assert.NotNull(result.Report);
+            Assert.NotEmpty(result.AcceptedFindingIds);
+        }
+        // Strong signal of the model-assisted planner: the comparison was split per entity, so
+        // evidence was gathered from BOTH articles (prints the reason above if it does not hold).
+        Assert.True(result.EvidenceSnapshots >= 2,
+            $"expected balanced evidence from both entities, got {result.EvidenceSnapshots} snapshot(s): {result.InconclusiveReason}");
+        Assert.True(result.Completed, $"comparison research did not complete: {result.InconclusiveReason}");
+    }
 }
