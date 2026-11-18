@@ -31,7 +31,10 @@ public sealed class OllamaInferenceClient : IInferenceClient, IDisposable
         }
         else
         {
-            _http = new HttpClient { BaseAddress = new Uri(normalized, UriKind.Absolute), Timeout = TimeSpan.FromSeconds(120) };
+            // Generous timeout so a large model's first call (cold load of a multi-GB model
+            // plus generation) does not time out. The cloud lease is kept alive separately
+            // by the worker's heartbeat.
+            _http = new HttpClient { BaseAddress = new Uri(normalized, UriKind.Absolute), Timeout = TimeSpan.FromSeconds(600) };
             _ownsHttp = true;
         }
     }
