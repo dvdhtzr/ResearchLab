@@ -78,7 +78,7 @@ container cannot provide — they are verified on the **owner's Windows machine*
 
 The complete authorized scope is implemented and verified. M6 (public deployment) remains NOT
 AUTHORIZED and was never executed. Verified test totals: cloud-api 54, web 9, .NET Infrastructure.Tests
-83, .NET Evaluation.Tests 7, .NET Integration.Tests (live, gated) 6.
+91, .NET Evaluation.Tests 7, .NET Integration.Tests (live, gated) 7.
 
 ## Post-M5 enhancement — model-assisted Planner (HANDOFF §7.1) · GREEN
 
@@ -107,13 +107,17 @@ untouched). "The model proposes; the application authorizes" is preserved.
 
 ## Post-M5 enhancement — multi-source evidence (HANDOFF §7.2) · GREEN
 
-**What:** Evidence is no longer Wikipedia-only. **Wikidata** (CC0, no key, host-locked
-`www.wikidata.org`) is added as a second approved free source behind a **pluggable composition**, so
-the Planner's queries fan out across sources and entities/comparisons ground on structured facts as
-well as prose.
-- `WikidataSourceAdapter` — `wbsearchentities` (search) + `wbgetentities` (fetch) rendering
-  label/description/aliases/claims into readable "property: value" facts, resolving property/entity IDs
-  to labels in one bounded batch. All parsing/rendering is pure `public static` (network-free tests).
+**What:** Evidence is no longer Wikipedia-only. Two approved free sources are added behind a
+**pluggable composition**, so the Planner's queries fan out across sources and entities/comparisons
+ground on structured facts and scholarly abstracts as well as prose.
+- `WikidataSourceAdapter` (CC0, no key, host-locked `www.wikidata.org`) — `wbsearchentities` (search) +
+  `wbgetentities` (fetch) rendering label/description/aliases/claims into readable "property: value"
+  facts, resolving property/entity IDs to labels in one bounded batch. All parsing/rendering is pure
+  `public static` (network-free tests).
+- `ArxivSourceAdapter` (CC0 metadata, no key, host-locked `export.arxiv.org`) — `api/query` search +
+  `id_list` fetch over Atom XML (parsed with `System.Xml.Linq`), rendering Title/Authors/Abstract;
+  hits route via an `export.arxiv.org/abs/{id}` handle. Retry base delay 3 s for arXiv's ~1 req/3 s
+  throttle. Pure `public static` parse/render (network-free tests).
 - `CompositeSourceSearch` (round-robin merge across sources, deduped, bounded; fail-soft if one source
   is down) + `CompositeSourceAdapter` (routes fetch by host; **fail-closed** on an unapproved host, on
   top of each adapter's own host lock). `ResearchRunner` wires Wikipedia + Wikidata behind both.
@@ -129,15 +133,16 @@ Governance unchanged otherwise: `EvidenceAcquisition`, finding validation, and
 authorizes" holds — this only governs which approved sources are consulted.
 
 **Verified (owner's Windows box, .NET 10.0.12):**
-- `dotnet test .\tests\Infrastructure.Tests` → **83/83** (adds `CompositeSourceTests` ×6,
-  `WikidataSourceAdapterTests` ×9, `HttpResilienceTests` ×4, and 1 orchestrator one-source-failure
-  case). Model-free; build-verified clean.
-- `scripts\check-ollama.ps1` (live, `qwen3.5:9b`) → **6/6 GREEN**, incl. the new
-  `M4ResearchLiveTests.MultiSource_GroundsOnWikipediaAndWikidata` (a real run grounding on ≥2 snapshots
-  — one Wikipedia, one Wikidata — for a single entity), with all prior live tests passing.
+- `dotnet test .\tests\Infrastructure.Tests` → **91/91** (adds `CompositeSourceTests` ×6,
+  `WikidataSourceAdapterTests` ×9, `HttpResilienceTests` ×4, `ArxivSourceAdapterTests` ×8, and 1
+  orchestrator one-source-failure case). Model-free; build-verified clean.
+- `scripts\check-ollama.ps1` (live, `qwen3.5:9b`) → **7/7 GREEN**:
+  `MultiSource_GroundsOnWikipediaAndWikidata` (a real run grounding on ≥2 snapshots — one Wikipedia, one
+  Wikidata — for a single entity) and `ArxivAdapter_SearchesAndFetchesARealAbstract` (live arXiv search
+  + fetch capturing a real abstract), with all prior live tests passing.
 
-**Next (HANDOFF §7.2 continuation):** arXiv is a strong second additional source and drops in via the
-same `ISourceSearch`/`ISourceAdapter` + composite pattern (note its 1 req/3 s throttle).
+**Next (HANDOFF §7.2 continuation):** rank/dedupe captured passages by relevance to the question before
+they reach the prompt, so the strongest evidence leads regardless of which source produced it.
 
 ## What is explicitly NOT done / assumed
 
