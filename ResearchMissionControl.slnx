@@ -1,0 +1,20 @@
+<Solution>
+  <!-- STATUS: unverified (no dotnet SDK in build env). Open on Windows + .NET 10. -->
+  <Folder Name="/src/">
+    <Project Path="src/ResearchMissionControl.Domain/ResearchMissionControl.Domain.csproj" />
+    <Project Path="src/ResearchMissionControl.Application/ResearchMissionControl.Application.csproj" />
+    <Project Path="src/ResearchMissionControl.Infrastructure/ResearchMissionControl.Infrastructure.csproj" />
+    <Project Path="src/ResearchMissionControl.Worker/ResearchMissionControl.Worker.csproj" />
+    <Project Path="src/ResearchMissionControl.Research/ResearchMissionControl.Research.csproj" />
+    <Project Path="src/ResearchMissionControl.Evaluation/ResearchMissionControl.Evaluation.csproj" />
+    <Project Path="src/ResearchMissionControl.LocalReview/ResearchMissionControl.LocalReview.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Domain.Tests/Domain.Tests.csproj" />
+    <Project Path="tests/Application.Tests/Application.Tests.csproj" />
+    <Project Path="tests/Infrastructure.Tests/Infrastructure.Tests.csproj" />
+    <Project Path="tests/Research.Tests/Research.Tests.csproj" />
+    <Project Path="tests/Evaluation.Tests/Evaluation.Tests.csproj" />
+    <Project Path="tests/Integration.Tests/Integration.Tests.csproj" />
+  </Folder>
+</Solution>

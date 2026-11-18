@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Shared MSBuild properties for the ResearchMissionControl .NET solution.
+    STATUS: unverified in this build environment (no dotnet SDK present).
+    The .NET worker targets Windows (.NET 10). Build/test on a Windows box with
+    .NET 10 + a local Ollama before treating M2+ as GREEN.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

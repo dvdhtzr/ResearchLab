@@ -1,0 +1,22 @@
+<Project>
+  <!--
+    Central package management. Versions pinned to the exact set resolved on the
+    owner's .NET 10.0.401 machine (spec §5).
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Data + hosting. -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+    <!-- Test stack. -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
+  </ItemGroup>
+  <!--
+    M3 talks to Ollama over its stable REST API via HttpClient (no SDK dependency).
+    M4 may add JsonSchema.Net for strict role-schema validation — pinned when added.
+  -->
+</Project>

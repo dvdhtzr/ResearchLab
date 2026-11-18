@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://researchmissioncontrol.local/schemas/mutation-success.schema.json",
+  "title": "MutationSuccessResponse",
+  "type": "object",
+  "required": ["contractVersion", "operationId", "jobId", "stateVersion", "executionGeneration", "acceptedAt", "outcome"],
+  "properties": {
+    "contractVersion": { "const": "1.0" },
+    "operationId": { "type": "string", "format": "uuid" },
+    "jobId": { "type": "string", "format": "uuid" },
+    "stateVersion": { "type": "integer", "minimum": 0 },
+    "executionGeneration": { "type": "integer", "minimum": 0 },
+    "acceptedAt": { "type": "string", "format": "date-time" },
+    "outcome": { "type": "string", "enum": ["accepted"] },
+    "state": {
+      "type": "string",
+      "enum": ["Queued", "Claimed", "Running", "RecoveryRequired", "Completed", "Failed", "Cancelled"]
+    }
+  }
+}

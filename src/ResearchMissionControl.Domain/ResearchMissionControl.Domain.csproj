@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- pure domain: job states, transitions, role schemas types, budgets -->
+  <!-- STATUS: unverified skeleton (no dotnet SDK in build env). -->
+  <PropertyGroup>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,26 @@
+{
+  // ResearchMissionControl Cloudflare Worker API.
+  // LOCAL / FREE-PLAN ONLY. No production deployment is authorized by this config.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rmc-cloud-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rmc-local",
+      "database_id": "local-development-only-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    // Non-secret config only. Secrets (owner allowlist, worker verifiers, OAuth) come from
+    // wrangler secrets / .dev.vars and are NEVER committed.
+    "RMC_ENVIRONMENT": "local",
+    "RMC_CONTRACT_VERSION": "1.0",
+    "RMC_LEASE_SECONDS": "180",
+    "RMC_DEV_AUTH_ENABLED": "true"
+  }
+}

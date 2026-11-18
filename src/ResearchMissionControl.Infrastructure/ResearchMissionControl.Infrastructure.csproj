@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- SQLite journals, checkpoints, reservations, outbox (M2). -->
+  <PropertyGroup>
+    <RootNamespace>ResearchMissionControl.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ResearchMissionControl.Domain/ResearchMissionControl.Domain.csproj" />
+    <ProjectReference Include="../ResearchMissionControl.Application/ResearchMissionControl.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The worker SQLite schema is embedded so the migration runner needs no file copy. -->
+    <EmbeddedResource Include="Migrations/0001_worker_core.sql" />
+  </ItemGroup>
+</Project>

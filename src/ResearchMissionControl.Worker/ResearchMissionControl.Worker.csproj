@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <!-- the .NET Worker Service host: poll loop, lease heartbeat, reconcile -->
+  <PropertyGroup>
+    <RootNamespace>ResearchMissionControl.Worker</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ResearchMissionControl.Domain/ResearchMissionControl.Domain.csproj" />
+    <ProjectReference Include="../ResearchMissionControl.Application/ResearchMissionControl.Application.csproj" />
+    <ProjectReference Include="../ResearchMissionControl.Infrastructure/ResearchMissionControl.Infrastructure.csproj" />
+    <ProjectReference Include="../ResearchMissionControl.Research/ResearchMissionControl.Research.csproj" />
+    <ProjectReference Include="../ResearchMissionControl.Evaluation/ResearchMissionControl.Evaluation.csproj" />
+  </ItemGroup>
+</Project>

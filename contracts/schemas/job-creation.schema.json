@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://researchmissioncontrol.local/schemas/job-creation.schema.json",
+  "title": "JobCreationRequest",
+  "description": "Owner request to admit a new research investigation job. Server controls job id, owner, budget, timestamps, state, generation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "jobType", "request", "executionProfile", "priority", "visibility"],
+  "properties": {
+    "contractVersion": { "const": "1.0" },
+    "jobType": { "type": "string", "enum": ["research.investigation.v1"] },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "evidencePolicy"],
+      "properties": {
+        "question": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "evidencePolicy": {
+          "type": "string",
+          "enum": ["hybrid-governed", "local-only", "approved-sources-only"]
+        }
+      }
+    },
+    "executionProfile": { "type": "string", "enum": ["quick", "standard", "extended"] },
+    "priority": { "type": "string", "enum": ["low", "normal", "high"] },
+    "visibility": { "type": "string", "enum": ["private", "public_demo_requested"] }
+  }
+}

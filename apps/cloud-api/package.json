@@ -1,0 +1,20 @@
+{
+  "name": "@rmc/cloud-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ResearchMissionControl Cloudflare Worker API (authoritative job orchestration) + D1",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.19",
+    "@cloudflare/workers-types": "^5.20261117.1",
+    "typescript": "^5.6.3",
+    "vitest": "~3.0.0",
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://researchmissioncontrol.local/schemas/research/research-findings.v1.schema.json",
+  "title": "ResearchFindingsV1",
+  "description": "Researcher output. Every finding must cite captured evidence passages; unrecognized evidence IDs cause rejection (validated by the host, not the model).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "findings", "openQuestions"],
+  "properties": {
+    "schemaVersion": { "const": "ResearchFindingsV1" },
+    "findings": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["findingId", "statement", "evidencePassageIds", "limitations"],
+        "properties": {
+          "findingId": { "type": "string", "pattern": "^f[0-9]{1,4}$" },
+          "statement": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "evidencePassageIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": { "type": "string" }
+          },
+          "limitations": { "type": "string", "maxLength": 1000 },
+          "followUpProposals": {
+            "type": "array",
+            "maxItems": 10,
+            "items": { "type": "string", "maxLength": 400 }
+          }
+        }
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "type": "string", "maxLength": 500 }
+    }
+  }
+}
