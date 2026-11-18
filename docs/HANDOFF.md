@@ -42,14 +42,20 @@ The **model proposes; the application authorizes.** All inference is local. No p
   (`Domain/ResearchPlan.cs` → `PlanValidator`) and **fails safe** to the deterministic Planner. Evidence
   acquisition is now **balanced** across queries (round-robin fetch + passage interleaving), so
   comparisons ground on every entity, not just the first article. Comparison questions ground better.
+- **Multi-source evidence (§7.2 — DONE, GREEN):** Wikidata (CC0, no key) added as a second approved
+  free source behind a **pluggable merge** (`CompositeSourceSearch` round-robin + fail-soft;
+  `CompositeSourceAdapter` host-routed + fail-closed). Structured facts complement Wikipedia prose;
+  rights metadata is now recorded per source. Approved-source GETs retry transient rate-limits (429/5xx)
+  with backoff honouring `Retry-After` (`HttpResilience`); a failed source degrades to honest
+  `inconclusive`, never a crash. arXiv drops in next via the same pattern.
 - **Smarter deterministic Planner** (searches salient terms, not the whole question) — retained as the
   authorized fallback for the model-assisted Planner.
 - **Model switching** via `RMC_MODEL` / `run-worker.ps1 -Model` (registry auto-approves the named model).
 - Robustness: dev worker-auth fallback (no `.dev.vars` needed locally), HTTP connection recycling,
   reasoning-model (`<think>`) JSON handling.
 
-**Verified test totals:** cloud-api **54**, web **9**, .NET `Infrastructure.Tests` **63**,
-`Evaluation.Tests` **7**, `Integration.Tests` (live, gated by `RMC_OLLAMA_TESTS`) **5**.
+**Verified test totals:** cloud-api **54**, web **9**, .NET `Infrastructure.Tests` **83**,
+`Evaluation.Tests` **7**, `Integration.Tests` (live, gated by `RMC_OLLAMA_TESTS`) **6**.
 
 ## 4. Authority split (do not blur)
 
@@ -101,10 +107,12 @@ Highest-leverage next steps (roughly ordered):
    Planner with deterministic fallback + balanced acquisition; see
    `implementation-status.md` → "Post-M5 enhancement — model-assisted Planner". Evidence is still
    Wikipedia-only; broadening sources is item 2.
-2. **Multi-source synthesis** — currently fetches top Wikipedia hits only (now balanced across the
-   planned queries); broaden to additional **free/public** sources (e.g. Wikidata/Wikimedia REST,
-   DBpedia, arXiv, PubMed, openlibrary), deduplicate, and rank passages by relevance to the question.
-   Keep the loopback/no-paid-services boundary. **← next focus.**
+2. **Multi-source synthesis** — **DONE (GREEN, 2026-11-18)** for the first source: Wikidata added
+   behind a pluggable merge (round-robin across sources, host-routed fetch, transient-429 retry); see
+   `implementation-status.md` → "Post-M5 enhancement — multi-source evidence". **Remaining:** add a
+   second source (arXiv is the strongest candidate; same `ISourceSearch`/`ISourceAdapter` + composite
+   pattern, mind its 1 req/3 s throttle), and rank/dedupe passages by relevance to the question. Keep
+   the loopback/no-paid-services boundary.
 3. **Wire the publication flow into the owner UI** — the digest-approval → publish → public-showcase
    pipeline exists and is tested cloud-side, but the worker doesn't auto-generate a publication candidate
    and the owner UI has no "review & approve digest" screen yet.
