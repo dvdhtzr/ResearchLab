@@ -1,6 +1,6 @@
 # Implementation status (honest, living record)
 
-**Updated:** 2026-11-17 · **Branch:** `feat/research-mission-control-m0-m5`
+**Updated:** 2026-11-18 · **Branch:** `feat/research-mission-control-m0-m5`
 
 This is the authoritative statement of what actually works. It never reports untested work as done.
 
@@ -77,8 +77,33 @@ container cannot provide — they are verified on the **owner's Windows machine*
 ## All milestones GREEN (M0–M5)
 
 The complete authorized scope is implemented and verified. M6 (public deployment) remains NOT
-AUTHORIZED and was never executed. Verified test totals: cloud-api 46, web 9, .NET Infrastructure.Tests
-43, .NET Evaluation.Tests 7, .NET Integration.Tests (live, gated) 4.
+AUTHORIZED and was never executed. Verified test totals: cloud-api 54, web 9, .NET Infrastructure.Tests
+63, .NET Evaluation.Tests 7, .NET Integration.Tests (live, gated) 5.
+
+## Post-M5 enhancement — model-assisted Planner (HANDOFF §7.1) · GREEN
+
+**What:** The Planner no longer reduces a question to a single deterministic keyword query. The local
+model now **proposes** search queries (splitting "X vs Y" comparisons into one query per entity); the
+application **authorizes** them (`Domain/ResearchPlan.cs` → `PlanValidator`: trims, collapses
+whitespace, de-duplicates case-insensitively, caps count=3/length=80, and degrades an empty or
+unusable proposal to the deterministic `QueryPlanner`). The orchestrator gained a budgeted `planner`
+inference stage that **fails safe** to the deterministic query, plus **balanced evidence acquisition**
+— round-robin document fetch across the planned queries and passage interleaving across documents — so
+a comparison grounds on every entity instead of only the first article's passages. Evidence governance
+and the `ResearchOrchestrator.RunAsync` signature are unchanged (`ResearchRunner`/`WorkerLoop`
+untouched). "The model proposes; the application authorizes" is preserved.
+
+**Verified (owner's Windows box, .NET 10.0.12):**
+- `dotnet test .\tests\Infrastructure.Tests` → **63/63** (adds `PlanValidatorTests` ×8 and 2 new
+  orchestrator cases: planner-failure fallback, and a comparison case asserting the researcher prompt
+  carries evidence from BOTH entities; the 2 prior orchestrator scenarios updated to run the planner
+  stage first). Model-free; also build-verified clean.
+- `scripts\check-ollama.ps1` (live, `RMC_OLLAMA_TESTS=1`, `qwen3.5:9b`) → **GREEN**, incl. the new
+  `M4ResearchLiveTests.ComparisonQuestion_GroundsEvidenceFromBothEntities` (a real
+  "Compare PostgreSQL and MySQL" run grounded on ≥2 entity snapshots and completed), with the prior
+  live tests still passing.
+
+**Still Wikipedia-only.** Broadening to additional free/public sources is HANDOFF §7.2 (next).
 
 ## What is explicitly NOT done / assumed
 

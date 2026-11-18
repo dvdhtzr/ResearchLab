@@ -37,13 +37,19 @@ The **model proposes; the application authorizes.** All inference is local. No p
   claimed, researched by the local model, and completed back to the cloud.
 - **Research reports are visible** in the owner console (summary + evidence-grounded findings), not just
   a disposition.
-- **Smarter deterministic Planner** (searches salient terms, not the whole question).
+- **Model-assisted Planner (§7.1 — DONE, GREEN):** the local model proposes targeted search queries and
+  splits "X vs Y" comparisons into one query per entity; the application authorizes them
+  (`Domain/ResearchPlan.cs` → `PlanValidator`) and **fails safe** to the deterministic Planner. Evidence
+  acquisition is now **balanced** across queries (round-robin fetch + passage interleaving), so
+  comparisons ground on every entity, not just the first article. Comparison questions ground better.
+- **Smarter deterministic Planner** (searches salient terms, not the whole question) — retained as the
+  authorized fallback for the model-assisted Planner.
 - **Model switching** via `RMC_MODEL` / `run-worker.ps1 -Model` (registry auto-approves the named model).
 - Robustness: dev worker-auth fallback (no `.dev.vars` needed locally), HTTP connection recycling,
   reasoning-model (`<think>`) JSON handling.
 
-**Verified test totals:** cloud-api **54**, web **9**, .NET `Infrastructure.Tests` **53**,
-`Evaluation.Tests` **7**, `Integration.Tests` (live, gated by `RMC_OLLAMA_TESTS`) **4**.
+**Verified test totals:** cloud-api **54**, web **9**, .NET `Infrastructure.Tests` **63**,
+`Evaluation.Tests` **7**, `Integration.Tests` (live, gated by `RMC_OLLAMA_TESTS`) **5**.
 
 ## 4. Authority split (do not blur)
 
@@ -90,11 +96,15 @@ Honest state: it's a **governed research demonstrator**, not a polished analyst.
 and reports `inconclusive` honestly when it can't.
 
 Highest-leverage next steps (roughly ordered):
-1. **Model-assisted planning** — let the model propose 1–3 targeted search queries, and split "X vs Y"
-   comparison questions into separate lookups per entity. This is the single biggest quality lever for
-   the "others not so much" questions. (Current Planner is deterministic keyword extraction.)
-2. **Multi-source synthesis** — currently fetches the top ~2 Wikipedia hits; broaden sources /
-   deduplicate / rank passages by relevance to the question.
+1. ~~**Model-assisted planning** — let the model propose 1–3 targeted search queries, and split "X vs Y"
+   comparison questions into separate lookups per entity.~~ **DONE (GREEN, 2026-11-18)** — model-assisted
+   Planner with deterministic fallback + balanced acquisition; see
+   `implementation-status.md` → "Post-M5 enhancement — model-assisted Planner". Evidence is still
+   Wikipedia-only; broadening sources is item 2.
+2. **Multi-source synthesis** — currently fetches top Wikipedia hits only (now balanced across the
+   planned queries); broaden to additional **free/public** sources (e.g. Wikidata/Wikimedia REST,
+   DBpedia, arXiv, PubMed, openlibrary), deduplicate, and rank passages by relevance to the question.
+   Keep the loopback/no-paid-services boundary. **← next focus.**
 3. **Wire the publication flow into the owner UI** — the digest-approval → publish → public-showcase
    pipeline exists and is tested cloud-side, but the worker doesn't auto-generate a publication candidate
    and the owner UI has no "review & approve digest" screen yet.
