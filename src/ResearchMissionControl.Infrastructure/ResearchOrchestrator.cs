@@ -60,8 +60,9 @@ public sealed class ResearchOrchestrator
     {
         var attempts = 0;
 
-        // 1. Plan (deterministic for a straightforward request): search for the question.
-        var hits = await _search.SearchAsync(question, 3, cancellationToken).ConfigureAwait(false);
+        // 1. Plan (deterministic): extract the salient search terms from the question.
+        var query = QueryPlanner.PlanQuery(question);
+        var hits = await _search.SearchAsync(query, 3, cancellationToken).ConfigureAwait(false);
         if (hits.Count == 0)
             return ResearchResult.Inconclusive("no_sources", attempts, 0);
 
