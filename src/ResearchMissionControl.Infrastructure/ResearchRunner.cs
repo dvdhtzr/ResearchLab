@@ -41,7 +41,15 @@ public sealed class ResearchRunner : IResearchRunner
         var orchestrator = new ResearchOrchestrator(gateway, wikipedia, acquisition, evidence, _modelId);
 
         var result = await orchestrator.RunAsync(jobId, generation, question, budget, cancellationToken).ConfigureAwait(false);
-        return new ResearchRunOutcome(result.Disposition, result.Completed ? null : result.InconclusiveReason);
+
+        var report = new ReportSummary(
+            result.Report?.Question ?? question,
+            result.Report?.ExecutiveSummary ?? string.Empty,
+            result.FindingStatements,
+            result.Disposition,
+            result.Completed ? null : result.InconclusiveReason);
+
+        return new ResearchRunOutcome(result.Disposition, result.Completed ? null : result.InconclusiveReason, report);
     }
 
     private static ExecutionProfile MapProfile(string profile) => profile switch

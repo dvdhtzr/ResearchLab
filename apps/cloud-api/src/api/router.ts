@@ -242,7 +242,13 @@ export async function handle(request: Request, env: Env): Promise<Response> {
             }));
           case "heartbeat":
             return json(await heartbeat({ db, now, worker, idempotencyKey: key, requestHash: hash, jobId, lease, leaseSeconds }));
-          case "complete":
+          case "complete": {
+            // Optional owner-visible research report (bounded). Stored in the completed
+            // event's details — NOT in public projections (those are server-templated).
+            const report = body.report;
+            if (report !== undefined && (typeof report !== "object" || report === null || JSON.stringify(report).length > 64 * 1024)) {
+              throw new ApiError("INVALID_SCHEMA", "report must be an object under 64 KiB.");
+            }
             return json(await transition({
               db, now, actor: worker, operation: "worker.complete", idempotencyKey: key, requestHash: hash,
               jobId, op: "complete", eventType: "completed", lease, clearLease: true,
@@ -250,8 +256,9 @@ export async function handle(request: Request, env: Env): Promise<Response> {
                 research_disposition: typeof body.disposition === "string" ? body.disposition : "not_determined",
                 current_stage: "done",
               },
-              details: { disposition: body.disposition ?? "not_determined" },
+              details: { disposition: body.disposition ?? "not_determined", report: report ?? null },
             }));
+          }
           case "fail":
             return json(await transition({
               db, now, actor: worker, operation: "worker.fail", idempotencyKey: key, requestHash: hash,

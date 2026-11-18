@@ -22,7 +22,7 @@ public sealed class WorkerLoopTests
             Task.FromResult(_claims.Count > 0 ? _claims.Dequeue() : null);
         public Task StartAsync(string j, long g, string l, CancellationToken ct) { Calls.Add("start"); return Task.CompletedTask; }
         public Task HeartbeatAsync(string j, long g, string l, CancellationToken ct) { Calls.Add("heartbeat"); return Task.CompletedTask; }
-        public Task CompleteAsync(string j, long g, string l, string disposition, CancellationToken ct) { Calls.Add("complete"); CompletedDisposition = disposition; return Task.CompletedTask; }
+        public Task CompleteAsync(string j, long g, string l, string disposition, ReportSummary? report, CancellationToken ct) { Calls.Add("complete"); CompletedDisposition = disposition; return Task.CompletedTask; }
         public Task FailAsync(string j, long g, string l, string reason, CancellationToken ct) { Calls.Add("fail"); FailedReason = reason; return Task.CompletedTask; }
     }
 
@@ -71,7 +71,7 @@ public sealed class WorkerLoopTests
         public Task<ClaimedJob?> ClaimAsync(CancellationToken ct) => throw new InvalidOperationException("connection reset");
         public Task StartAsync(string j, long g, string l, CancellationToken ct) { Calls.Add("start"); return Task.CompletedTask; }
         public Task HeartbeatAsync(string j, long g, string l, CancellationToken ct) => Task.CompletedTask;
-        public Task CompleteAsync(string j, long g, string l, string d, CancellationToken ct) { Calls.Add("complete"); return Task.CompletedTask; }
+        public Task CompleteAsync(string j, long g, string l, string d, ReportSummary? report, CancellationToken ct) { Calls.Add("complete"); return Task.CompletedTask; }
         public Task FailAsync(string j, long g, string l, string r, CancellationToken ct) { Calls.Add("fail"); return Task.CompletedTask; }
     }
 

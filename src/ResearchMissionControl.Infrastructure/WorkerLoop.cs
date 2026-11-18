@@ -63,7 +63,7 @@ public sealed class WorkerLoop
                 await Quiet(heartbeat).ConfigureAwait(false);
             }
 
-            await _cloud.CompleteAsync(job.JobId, job.Generation, job.LeaseId, outcome.Disposition, cancellationToken).ConfigureAwait(false);
+            await _cloud.CompleteAsync(job.JobId, job.Generation, job.LeaseId, outcome.Disposition, outcome.Report, cancellationToken).ConfigureAwait(false);
             var note = outcome.FailureReason is { Length: > 0 } reason ? $", note: {reason}" : string.Empty;
             _log?.Invoke($"completed {job.JobId} (disposition {outcome.Disposition}{note})");
         }

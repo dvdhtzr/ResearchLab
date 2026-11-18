@@ -11,12 +11,13 @@ public sealed record ResearchResult(
     ResearchReport? Report,
     string Disposition,
     IReadOnlyList<string> AcceptedFindingIds,
+    IReadOnlyList<string> FindingStatements,
     int EvidenceSnapshots,
     int ModelAttempts,
     string? InconclusiveReason)
 {
     public static ResearchResult Inconclusive(string reason, int attempts, int evidence) =>
-        new(false, null, "inconclusive", System.Array.Empty<string>(), evidence, attempts, reason);
+        new(false, null, "inconclusive", System.Array.Empty<string>(), System.Array.Empty<string>(), evidence, attempts, reason);
 }
 
 // The research laboratory workflow (spec §21): Plan → acquire authorized evidence →
@@ -64,17 +65,25 @@ public sealed class ResearchOrchestrator
         if (hits.Count == 0)
             return ResearchResult.Inconclusive("no_sources", attempts, 0);
 
-        // 2. Acquire authorized evidence from the top hit.
-        var proposal = new ToolProposal("source.fetch.v1", $"{{\"url\":{JsonSerializer.Serialize(hits[0].Url)}}}");
-        var acquired = await _acquisition.FetchAsync(jobId, proposal, hits[0].Url, cancellationToken).ConfigureAwait(false);
-        if (acquired is null || acquired.PassageIds.Count == 0)
+        // 2. Acquire authorized evidence from the top hits (bounded), for broader grounding.
+        var acquiredPassages = new List<string>();
+        foreach (var hit in hits.Take(2))
+        {
+            var proposal = new ToolProposal("source.fetch.v1", $"{{\"url\":{JsonSerializer.Serialize(hit.Url)}}}");
+            var acquired = await _acquisition.FetchAsync(jobId, proposal, hit.Url, cancellationToken).ConfigureAwait(false);
+            if (acquired is not null)
+                acquiredPassages.AddRange(acquired.PassageIds);
+            if (acquiredPassages.Count >= MaxPromptPassages)
+                break;
+        }
+        if (acquiredPassages.Count == 0)
             return ResearchResult.Inconclusive("no_evidence", attempts, _evidence.CountSnapshots(jobId));
 
         var labelToId = new Dictionary<string, string>(StringComparer.Ordinal);
         var passageBlock = new StringBuilder();
-        var labeled = acquired.PassageIds.Count > MaxPromptPassages
-            ? acquired.PassageIds.Take(MaxPromptPassages).ToList()
-            : acquired.PassageIds;
+        var labeled = acquiredPassages.Count > MaxPromptPassages
+            ? acquiredPassages.Take(MaxPromptPassages).ToList()
+            : acquiredPassages;
         for (var i = 0; i < labeled.Count; i++)
         {
             var label = "p" + (i + 1);
@@ -136,7 +145,9 @@ public sealed class ResearchOrchestrator
             return ResearchResult.Inconclusive("invalid_report", attempts, _evidence.CountSnapshots(jobId));
 
         return new ResearchResult(
-            true, report, disposition, committedIds.ToList(), _evidence.CountSnapshots(jobId), attempts, null);
+            true, report, disposition, committedIds.ToList(),
+            committed.Select(f => f.Statement).ToList(),
+            _evidence.CountSnapshots(jobId), attempts, null);
     }
 
     private static string DeriveDisposition(int challengeCount) =>

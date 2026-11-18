@@ -71,8 +71,21 @@ public sealed class CloudApiClient : ICloudApiClient, IDisposable
     public Task HeartbeatAsync(string jobId, long generation, string leaseId, CancellationToken cancellationToken) =>
         PostVoid($"api/v1/worker/jobs/{jobId}/heartbeat", Lease(leaseId, generation), cancellationToken);
 
-    public Task CompleteAsync(string jobId, long generation, string leaseId, string disposition, CancellationToken cancellationToken) =>
-        PostVoid($"api/v1/worker/jobs/{jobId}/complete", JsonSerializer.Serialize(new { leaseId, generation, disposition }), cancellationToken);
+    public Task CompleteAsync(string jobId, long generation, string leaseId, string disposition, ReportSummary? report, CancellationToken cancellationToken)
+    {
+        object? reportPayload = report is null
+            ? null
+            : new
+            {
+                question = report.Question,
+                summary = report.Summary,
+                findings = report.Findings,
+                disposition = report.Disposition,
+                reason = report.Reason,
+            };
+        var body = JsonSerializer.Serialize(new { leaseId, generation, disposition, report = reportPayload });
+        return PostVoid($"api/v1/worker/jobs/{jobId}/complete", body, cancellationToken);
+    }
 
     public Task FailAsync(string jobId, long generation, string leaseId, string reason, CancellationToken cancellationToken) =>
         PostVoid($"api/v1/worker/jobs/{jobId}/fail", JsonSerializer.Serialize(new { leaseId, generation, reason }), cancellationToken);

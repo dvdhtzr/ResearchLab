@@ -58,6 +58,8 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
   if (error && !job) return <div className="panel"><p className="error" role="alert">{error}</p></div>;
   if (!job) return <div className="panel"><p className="loading">Loading job…</p></div>;
 
+  const report = extractReport(events);
+
   const canHold = job.state === "Queued" && !job.holdRequested;
   const canRelease = job.state === "Queued" && job.holdRequested;
   const canCancel = ["Queued", "Claimed", "Running"].includes(job.state);
@@ -78,6 +80,26 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
         <button className="secondary" disabled={!canCancel} onClick={() => control("request_cancel")}>Cancel</button>
       </div>
 
+      {report && (
+        <section aria-label="Research report" style={{ marginBottom: 16 }}>
+          <h2>Research report</h2>
+          <p>{report.summary}</p>
+          {report.findings.length > 0 && (
+            <ul className="jobs">
+              {report.findings.map((f, i) => (
+                <li key={i}><div className="q">{f}</div></li>
+              ))}
+            </ul>
+          )}
+          {report.findings.length === 0 && (
+            <p className="empty">
+              No evidence-grounded findings for this question{report.reason ? ` (${report.reason})` : ""}. The result is
+              honestly reported as {job.researchDisposition ?? "inconclusive"} rather than fabricated.
+            </p>
+          )}
+        </section>
+      )}
+
       <h2>Timeline</h2>
       {events.length === 0 ? (
         <p className="empty">No activity recorded.</p>
@@ -95,4 +117,34 @@ export function JobDetail({ jobId, onChanged }: { jobId: string; onChanged: () =
       )}
     </div>
   );
+}
+
+interface ReportView {
+  summary: string;
+  findings: string[];
+  reason?: string;
+}
+
+// Pulls the owner-visible research report out of the completed event's details and
+// normalizes findings (strings or {statement} objects) for display.
+function extractReport(events: JobEventView[]): ReportView | null {
+  const completed = events.find((e) => e.eventType === "completed");
+  const raw = (completed?.details as { report?: unknown } | undefined)?.report;
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const findingsRaw = Array.isArray(r.findings) ? r.findings : [];
+  const findings = findingsRaw
+    .map((f) =>
+      typeof f === "string"
+        ? f
+        : f && typeof f === "object" && "statement" in f
+          ? String((f as Record<string, unknown>).statement)
+          : "",
+    )
+    .filter((s) => s.length > 0);
+  return {
+    summary: typeof r.summary === "string" ? r.summary : "",
+    findings,
+    reason: typeof r.reason === "string" ? r.reason : undefined,
+  };
 }
