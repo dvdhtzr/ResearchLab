@@ -24,6 +24,7 @@ public sealed class WorkerLoopTests
         public Task HeartbeatAsync(string j, long g, string l, CancellationToken ct) { Calls.Add("heartbeat"); return Task.CompletedTask; }
         public Task CompleteAsync(string j, long g, string l, string disposition, ReportSummary? report, CancellationToken ct) { Calls.Add("complete"); CompletedDisposition = disposition; return Task.CompletedTask; }
         public Task FailAsync(string j, long g, string l, string reason, CancellationToken ct) { Calls.Add("fail"); FailedReason = reason; return Task.CompletedTask; }
+        public Task ReportProgressAsync(string j, long g, string l, IReadOnlyList<ProgressUpdate> u, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class FixedRunner : IResearchRunner
@@ -31,7 +32,7 @@ public sealed class WorkerLoopTests
         private readonly ResearchRunOutcome _outcome;
         private readonly bool _throw;
         public FixedRunner(ResearchRunOutcome outcome, bool doThrow = false) { _outcome = outcome; _throw = doThrow; }
-        public Task<ResearchRunOutcome> RunAsync(string j, long g, string q, string p, CancellationToken ct)
+        public Task<ResearchRunOutcome> RunAsync(string j, long g, string q, string p, IProgressSink progress, CancellationToken ct)
         {
             if (_throw) throw new InvalidOperationException("boom");
             return Task.FromResult(_outcome);
@@ -73,6 +74,7 @@ public sealed class WorkerLoopTests
         public Task HeartbeatAsync(string j, long g, string l, CancellationToken ct) => Task.CompletedTask;
         public Task CompleteAsync(string j, long g, string l, string d, ReportSummary? report, CancellationToken ct) { Calls.Add("complete"); return Task.CompletedTask; }
         public Task FailAsync(string j, long g, string l, string r, CancellationToken ct) { Calls.Add("fail"); return Task.CompletedTask; }
+        public Task ReportProgressAsync(string j, long g, string l, IReadOnlyList<ProgressUpdate> u, CancellationToken ct) => Task.CompletedTask;
     }
 
     [Fact]

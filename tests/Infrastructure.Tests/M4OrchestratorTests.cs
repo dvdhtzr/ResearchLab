@@ -84,17 +84,30 @@ public sealed class M4OrchestratorTests
         }
     }
 
+    private sealed class RecordingSink : IProgressSink
+    {
+        public List<string> Stages { get; } = new();
+        public List<ProgressUpdate> Updates { get; } = new();
+        public Task ReportAsync(ProgressUpdate update, CancellationToken cancellationToken)
+        {
+            Stages.Add(update.Stage);
+            Updates.Add(update);
+            return Task.CompletedTask;
+        }
+    }
+
     private static ResearchOrchestrator Build(
         Microsoft.Data.Sqlite.SqliteConnection conn,
         ScriptedClient client,
         ISourceSearch search,
-        ISourceAdapter source)
+        ISourceAdapter source,
+        IProgressSink? progress = null)
     {
         var registry = new ModelRegistry(new[] { new ApprovedModel("qwen3.5:9b", "digest-abc") });
         var gateway = new InferenceGateway(client, registry, new OperationJournalStore(conn), new ReservationStore(conn));
         var evidence = new EvidenceStore(conn);
         var acquisition = new EvidenceAcquisition(source, evidence, ToolRegistry.Default());
-        return new ResearchOrchestrator(gateway, search, acquisition, evidence, "qwen3.5:9b");
+        return new ResearchOrchestrator(gateway, search, acquisition, evidence, "qwen3.5:9b", progress);
     }
 
     [Fact]
@@ -204,5 +217,29 @@ public sealed class M4OrchestratorTests
 
         Assert.True(result.Completed, result.InconclusiveReason);
         Assert.Equal(1, result.EvidenceSnapshots); // only the healthy source produced evidence
+    }
+
+    [Fact]
+    public async Task EmitsVerboseProgressForEachStage()
+    {
+        using var db = new TestDb();
+        var client = new ScriptedClient(
+            "{\"queries\":[\"PostgreSQL\"],\"comparison\":false}",
+            "{\"findings\":[{\"id\":\"f1\",\"statement\":\"PostgreSQL uses MVCC\",\"evidence\":[\"p1\"],\"limitations\":\"\"}]}",
+            "{\"challenges\":[]}",
+            "{\"summary\":\"PostgreSQL is a capable database.\",\"findingIds\":[\"f1\"],\"disposition\":\"supported\"}");
+        var sink = new RecordingSink();
+        var orchestrator = Build(db.Open(), client, new OneHitSearch(), new TextSource(), sink);
+
+        var result = await orchestrator.RunAsync(
+            "job-progress", 1, "What is PostgreSQL?", Budgets.For(ExecutionProfile.Standard), CancellationToken.None);
+
+        Assert.True(result.Completed, result.InconclusiveReason);
+        foreach (var stage in new[] { "plan", "search", "acquire", "research", "skeptic", "report" })
+            Assert.Contains(stage, sink.Stages);
+        // The plan update carries structured detail the owner UI can render.
+        var plan = sink.Updates.First(u => u.Stage == "plan");
+        Assert.Contains("Planned", plan.Message);
+        Assert.NotNull(plan.Detail);
     }
 }

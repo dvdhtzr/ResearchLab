@@ -50,11 +50,14 @@ public sealed class WorkerLoop
             using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var heartbeat = HeartbeatAsync(job, heartbeatCts.Token);
 
+            // Verbose progress flows to the owner's live view (lease-fenced) and the console.
+            var progress = new CloudProgressSink(_cloud, job.JobId, job.Generation, job.LeaseId, _log);
+
             ResearchRunOutcome outcome;
             try
             {
                 outcome = await _runner
-                    .RunAsync(job.JobId, job.Generation, job.Question, job.ExecutionProfile, cancellationToken)
+                    .RunAsync(job.JobId, job.Generation, job.Question, job.ExecutionProfile, progress, cancellationToken)
                     .ConfigureAwait(false);
             }
             finally

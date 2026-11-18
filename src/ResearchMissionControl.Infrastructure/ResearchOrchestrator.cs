@@ -39,19 +39,22 @@ public sealed class ResearchOrchestrator
     private readonly EvidenceAcquisition _acquisition;
     private readonly EvidenceStore _evidence;
     private readonly string _modelId;
+    private readonly IProgressSink _progress;
 
     public ResearchOrchestrator(
         InferenceGateway gateway,
         ISourceSearch search,
         EvidenceAcquisition acquisition,
         EvidenceStore evidence,
-        string modelId)
+        string modelId,
+        IProgressSink? progress = null)
     {
         _gateway = gateway;
         _search = search;
         _acquisition = acquisition;
         _evidence = evidence;
         _modelId = modelId;
+        _progress = progress ?? NullProgressSink.Instance;
     }
 
     public async Task<ResearchResult> RunAsync(
@@ -68,6 +71,9 @@ public sealed class ResearchOrchestrator
         //    degrades to deterministic keyword planning, so planning never leaves us worse off.
         var plan = await PlanAsync(jobId, generation, question, budget, attempts, cancellationToken).ConfigureAwait(false);
         attempts++; // the planner attempt is budgeted whether or not the model succeeded
+        await _progress.ReportAsync(new ProgressUpdate("plan",
+            $"Planned {plan.Queries.Count} quer{(plan.Queries.Count == 1 ? "y" : "ies")}{(plan.IsComparison ? " (comparison)" : "")}",
+            "info", new { queries = plan.Queries, comparison = plan.IsComparison }), cancellationToken).ConfigureAwait(false);
 
         // 2. Acquire authorized evidence, BALANCED across the planned queries. Each query is
         //    searched independently and documents are fetched round-robin, so a comparison
@@ -79,6 +85,8 @@ public sealed class ResearchOrchestrator
             {
                 var hits = await _search.SearchAsync(query, SearchHitsPerQuery, cancellationToken).ConfigureAwait(false);
                 hitsByQuery.Add(hits.ToList());
+                await _progress.ReportAsync(new ProgressUpdate("search", $"\"{query}\": {hits.Count} hit(s)", "detail",
+                    new { query, hits = hits.Count }), cancellationToken).ConfigureAwait(false);
             }
             catch (InferenceTransportException)
             {
@@ -90,7 +98,10 @@ public sealed class ResearchOrchestrator
             }
         }
         if (hitsByQuery.All(hits => hits.Count == 0))
+        {
+            await _progress.ReportAsync(new ProgressUpdate("inconclusive", "No sources found for the planned queries."), cancellationToken).ConfigureAwait(false);
             return ResearchResult.Inconclusive("no_sources", attempts, 0);
+        }
 
         var docPassages = new List<List<string>>();
         foreach (var url in SelectBalancedUrls(hitsByQuery))
@@ -100,7 +111,11 @@ public sealed class ResearchOrchestrator
             {
                 var acquired = await _acquisition.FetchAsync(jobId, proposal, url, cancellationToken).ConfigureAwait(false);
                 if (acquired is not null && acquired.PassageIds.Count > 0)
+                {
                     docPassages.Add(acquired.PassageIds.ToList());
+                    await _progress.ReportAsync(new ProgressUpdate("acquire", $"Captured {acquired.PassageIds.Count} passage(s)", "detail",
+                        new { url, passages = acquired.PassageIds.Count }), cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (InferenceTransportException)
             {
@@ -112,7 +127,10 @@ public sealed class ResearchOrchestrator
             }
         }
         if (docPassages.Count == 0)
+        {
+            await _progress.ReportAsync(new ProgressUpdate("inconclusive", "No evidence could be captured from the sources."), cancellationToken).ConfigureAwait(false);
             return ResearchResult.Inconclusive("no_evidence", attempts, _evidence.CountSnapshots(jobId));
+        }
 
         var labelToId = new Dictionary<string, string>(StringComparer.Ordinal);
         var passageBlock = new StringBuilder();
@@ -127,21 +145,35 @@ public sealed class ResearchOrchestrator
             passageBlock.AppendLine($"[{label}] {Truncate(text, MaxPassageChars)}");
         }
 
+        await _progress.ReportAsync(new ProgressUpdate("acquire",
+            $"{docPassages.Count} source document(s), {labeled.Count} passage(s) to the model", "info",
+            new { documents = docPassages.Count, passages = labeled.Count }), cancellationToken).ConfigureAwait(false);
+
         // 3. Researcher.
+        await _progress.ReportAsync(new ProgressUpdate("research", "Researcher extracting findings from the evidence…"), cancellationToken).ConfigureAwait(false);
         var researcher = new InferenceRequest(
             jobId, generation, _modelId, "researcher", "research",
             ResearcherPrompt(question, passageBlock.ToString()), new[] { "findings" });
         var researchOut = await _gateway.ExecuteAsync(researcher, generation, budget, attempts, cancellationToken).ConfigureAwait(false);
         attempts++;
         if (!researchOut.Success)
+        {
+            await _progress.ReportAsync(new ProgressUpdate("inconclusive", $"Researcher call failed: {researchOut.Failure}"), cancellationToken).ConfigureAwait(false);
             return ResearchResult.Inconclusive($"research_failed:{researchOut.Failure}", attempts, _evidence.CountSnapshots(jobId));
+        }
 
         var findings = ParseFindings(researchOut.Json!, labelToId);
         var validation = ResearchValidators.ValidateFindings(findings, _evidence.PassageExists);
         var committed = validation.Accepted;
         if (committed.Count == 0)
+        {
+            await _progress.ReportAsync(new ProgressUpdate("inconclusive", "No findings were grounded in the captured evidence."), cancellationToken).ConfigureAwait(false);
             return ResearchResult.Inconclusive("no_supported_findings", attempts, _evidence.CountSnapshots(jobId));
+        }
         var committedIds = new HashSet<string>(committed.Select(f => f.FindingId), StringComparer.Ordinal);
+        await _progress.ReportAsync(new ProgressUpdate("research",
+            $"{committed.Count} finding(s) accepted of {findings.Count} proposed", "info",
+            new { accepted = committed.Count, proposed = findings.Count }), cancellationToken).ConfigureAwait(false);
 
         // 4. Skeptic (challenges that reference genuine committed findings only).
         var skeptic = new InferenceRequest(
@@ -152,18 +184,24 @@ public sealed class ResearchOrchestrator
         var challenges = skepticOut.Success
             ? ParseChallenges(skepticOut.Json!).Where(c => ResearchValidators.IsChallengeValid(c, committedIds)).ToList()
             : new List<Challenge>();
+        await _progress.ReportAsync(new ProgressUpdate("skeptic", $"{challenges.Count} challenge(s) raised", "info",
+            new { challenges = challenges.Count }), cancellationToken).ConfigureAwait(false);
 
         // 5. Deterministic host decision (bounded by the round budget).
         _ = ResearchHost.Decide(challenges.Count, 1, budget.ResearchRounds);
 
         // 6. Report Builder (cannot introduce claims absent from committed findings).
+        await _progress.ReportAsync(new ProgressUpdate("report", "Report builder composing the summary…"), cancellationToken).ConfigureAwait(false);
         var reportRequest = new InferenceRequest(
             jobId, generation, _modelId, "report_builder", "report",
             ReportPrompt(question, committed, challenges.Count), new[] { "summary", "findingIds", "disposition" });
         var reportOut = await _gateway.ExecuteAsync(reportRequest, generation, budget, attempts, cancellationToken).ConfigureAwait(false);
         attempts++;
         if (!reportOut.Success)
+        {
+            await _progress.ReportAsync(new ProgressUpdate("inconclusive", $"Report builder call failed: {reportOut.Failure}"), cancellationToken).ConfigureAwait(false);
             return ResearchResult.Inconclusive($"report_failed:{reportOut.Failure}", attempts, _evidence.CountSnapshots(jobId));
+        }
 
         var parsed = ParseReport(reportOut.Json!);
         var citedIds = (parsed.FindingIds ?? new List<string>()).Where(committedIds.Contains).ToList();
@@ -177,7 +215,13 @@ public sealed class ResearchOrchestrator
             disposition);
 
         if (!ResearchValidators.IsReportValid(report, committedIds))
+        {
+            await _progress.ReportAsync(new ProgressUpdate("inconclusive", "The composed report did not validate against committed findings."), cancellationToken).ConfigureAwait(false);
             return ResearchResult.Inconclusive("invalid_report", attempts, _evidence.CountSnapshots(jobId));
+        }
+
+        await _progress.ReportAsync(new ProgressUpdate("report", $"Disposition: {disposition}", "info",
+            new { disposition, findings = committedIds.Count, challenges = challenges.Count }), cancellationToken).ConfigureAwait(false);
 
         return new ResearchResult(
             true, report, disposition, committedIds.ToList(),

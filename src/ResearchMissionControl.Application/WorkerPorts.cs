@@ -25,6 +25,8 @@ public interface ICloudApiClient
     Task HeartbeatAsync(string jobId, long generation, string leaseId, CancellationToken cancellationToken);
     Task CompleteAsync(string jobId, long generation, string leaseId, string disposition, ReportSummary? report, CancellationToken cancellationToken);
     Task FailAsync(string jobId, long generation, string leaseId, string reason, CancellationToken cancellationToken);
+    // Verbose, lease-fenced progress for the owner's live view. Best-effort.
+    Task ReportProgressAsync(string jobId, long generation, string leaseId, IReadOnlyList<ProgressUpdate> updates, CancellationToken cancellationToken);
 }
 
 public sealed record ResearchRunOutcome(string Disposition, string? FailureReason, ReportSummary? Report = null);
@@ -38,5 +40,6 @@ public interface IResearchRunner
         long generation,
         string question,
         string executionProfile,
+        IProgressSink progress,
         CancellationToken cancellationToken);
 }

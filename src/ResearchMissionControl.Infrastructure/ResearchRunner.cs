@@ -25,6 +25,7 @@ public sealed class ResearchRunner : IResearchRunner
         long generation,
         string question,
         string executionProfile,
+        IProgressSink progress,
         CancellationToken cancellationToken)
     {
         var budget = Budgets.For(MapProfile(executionProfile));
@@ -51,7 +52,7 @@ public sealed class ResearchRunner : IResearchRunner
             [ArxivSourceAdapter.AllowedHost] = arxiv,
         });
         var acquisition = new EvidenceAcquisition(sources, evidence, ToolRegistry.Default());
-        var orchestrator = new ResearchOrchestrator(gateway, search, acquisition, evidence, _modelId);
+        var orchestrator = new ResearchOrchestrator(gateway, search, acquisition, evidence, _modelId, progress);
 
         var result = await orchestrator.RunAsync(jobId, generation, question, budget, cancellationToken).ConfigureAwait(false);
 

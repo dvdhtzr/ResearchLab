@@ -90,6 +90,13 @@ public sealed class CloudApiClient : ICloudApiClient, IDisposable
     public Task FailAsync(string jobId, long generation, string leaseId, string reason, CancellationToken cancellationToken) =>
         PostVoid($"api/v1/worker/jobs/{jobId}/fail", JsonSerializer.Serialize(new { leaseId, generation, reason }), cancellationToken);
 
+    public Task ReportProgressAsync(string jobId, long generation, string leaseId, IReadOnlyList<ProgressUpdate> updates, CancellationToken cancellationToken)
+    {
+        var entries = updates.Select(u => new { stage = u.Stage, message = u.Message, level = u.Level, detail = u.Detail }).ToArray();
+        var body = JsonSerializer.Serialize(new { leaseId, generation, entries });
+        return PostVoid($"api/v1/worker/jobs/{jobId}/progress", body, cancellationToken);
+    }
+
     private static string Lease(string leaseId, long generation) =>
         JsonSerializer.Serialize(new { leaseId, generation });
 
