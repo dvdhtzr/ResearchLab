@@ -21,9 +21,13 @@ public sealed class WikidataSourceAdapter : ISourceSearch, ISourceAdapter, IDisp
 
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
+    private readonly int _maxAttempts;
+    private readonly TimeSpan _retryBaseDelay;
 
-    public WikidataSourceAdapter(HttpClient? http = null)
+    public WikidataSourceAdapter(HttpClient? http = null, int maxAttempts = 4, TimeSpan? retryBaseDelay = null)
     {
+        _maxAttempts = maxAttempts < 1 ? 1 : maxAttempts;
+        _retryBaseDelay = retryBaseDelay ?? TimeSpan.FromMilliseconds(500);
         if (http is not null)
         {
             _http = http;
@@ -306,19 +310,8 @@ public sealed class WikidataSourceAdapter : ISourceSearch, ISourceAdapter, IDisp
         return Uri.UnescapeDataString(raw);
     }
 
-    private async Task<string> GetAsync(string requestUri, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var response = await _http.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new InferenceTransportException($"Wikidata request failed: {ex.Message}");
-        }
-    }
+    private Task<string> GetAsync(string requestUri, CancellationToken cancellationToken) =>
+        HttpResilience.GetStringAsync(_http, requestUri, _maxAttempts, _retryBaseDelay, "Wikidata", cancellationToken);
 
     public void Dispose()
     {

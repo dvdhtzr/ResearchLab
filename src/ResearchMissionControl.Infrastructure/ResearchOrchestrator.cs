@@ -75,8 +75,19 @@ public sealed class ResearchOrchestrator
         var hitsByQuery = new List<List<SourceHit>>(plan.Queries.Count);
         foreach (var query in plan.Queries)
         {
-            var hits = await _search.SearchAsync(query, SearchHitsPerQuery, cancellationToken).ConfigureAwait(false);
-            hitsByQuery.Add(hits.ToList());
+            try
+            {
+                var hits = await _search.SearchAsync(query, SearchHitsPerQuery, cancellationToken).ConfigureAwait(false);
+                hitsByQuery.Add(hits.ToList());
+            }
+            catch (InferenceTransportException)
+            {
+                hitsByQuery.Add(new List<SourceHit>()); // source search failed for this query; degrade, don't crash
+            }
+            catch (ArgumentException)
+            {
+                hitsByQuery.Add(new List<SourceHit>());
+            }
         }
         if (hitsByQuery.All(hits => hits.Count == 0))
             return ResearchResult.Inconclusive("no_sources", attempts, 0);

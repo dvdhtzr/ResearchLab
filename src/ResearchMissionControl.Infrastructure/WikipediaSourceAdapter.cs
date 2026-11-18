@@ -12,9 +12,13 @@ public sealed class WikipediaSourceAdapter : ISourceSearch, ISourceAdapter, IDis
     public const string AllowedHost = "en.wikipedia.org";
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
+    private readonly int _maxAttempts;
+    private readonly TimeSpan _retryBaseDelay;
 
-    public WikipediaSourceAdapter(HttpClient? http = null)
+    public WikipediaSourceAdapter(HttpClient? http = null, int maxAttempts = 4, TimeSpan? retryBaseDelay = null)
     {
+        _maxAttempts = maxAttempts < 1 ? 1 : maxAttempts;
+        _retryBaseDelay = retryBaseDelay ?? TimeSpan.FromMilliseconds(500);
         if (http is not null)
         {
             _http = http;
@@ -83,19 +87,8 @@ public sealed class WikipediaSourceAdapter : ISourceSearch, ISourceAdapter, IDis
         return new SourceDocument(url, title, text, $"wikipedia:en:{title}", "CC BY-SA 4.0");
     }
 
-    private async Task<string> GetAsync(string requestUri, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var response = await _http.GetAsync(requestUri, cancellationToken).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new InferenceTransportException($"Wikipedia request failed: {ex.Message}");
-        }
-    }
+    private Task<string> GetAsync(string requestUri, CancellationToken cancellationToken) =>
+        HttpResilience.GetStringAsync(_http, requestUri, _maxAttempts, _retryBaseDelay, "Wikipedia", cancellationToken);
 
     private static string TitleToUrl(string title) =>
         $"https://{AllowedHost}/wiki/{Uri.EscapeDataString(title.Replace(' ', '_'))}";
